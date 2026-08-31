@@ -1,0 +1,2820 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>タスクエ</title>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<style>
+  :root{
+    --bg-deep:#1b140c;
+    --bg-panel:#1e1710;
+    --bg-panel-raised:#251c13;
+    --line:#3a2c1a;
+    --ink:#ece1cb;
+    --ink-dim:#a7967a;
+    --fire:#e08b3d;
+    --fire-dim:#8a5a28;
+    --blood:#a83232;
+    --blood-dim:#5c2222;
+    --arcane:#5c8aa1;
+    --arcane-dim:#365a68;
+    --gold:#c9a227;
+    --good:#5f8a5a;
+    --radius:10px;
+    --font-display:'Cinzel','Noto Serif JP',serif;
+    --font-body:'Zen Maru Gothic','Hiragino Sans',sans-serif;
+    --font-mono:'JetBrains Mono','Courier New',monospace;
+    --area-glow-1:#3a4f2a;
+    --area-glow-2:#1a2a18;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0; transition:background-color .4s ease;}
+  body{
+    color:var(--ink);
+    font-family:var(--font-body);
+    min-height:100vh;
+    padding:28px 16px 60px;
+  }
+  body[data-theme="dark"]{
+    background:
+      radial-gradient(ellipse 900px 520px at 15% -10%, var(--area-glow-1) 0%, transparent 62%),
+      radial-gradient(ellipse 900px 520px at 100% 112%, var(--area-glow-2) 0%, transparent 62%),
+      radial-gradient(ellipse 700px 260px at 50% 128%, rgba(224,139,61,0.14) 0%, transparent 68%),
+      radial-gradient(circle at center, rgba(255,255,255,0.05) 1px, transparent 1.4px) 0 0/46px 46px,
+      var(--bg-deep);
+  }
+  body[data-theme="light"]{
+    background:
+      linear-gradient(180deg, var(--area-sky) 0%, transparent 48%),
+      radial-gradient(ellipse 760px 320px at 50% 108%, var(--area-ground) 0%, transparent 66%),
+      var(--bg-deep);
+  }
+  a{color:inherit;}
+  .wrap{max-width:860px;margin:0 auto;}
+
+  .title{
+    font-family:var(--font-display);
+    font-size:clamp(22px,4vw,32px);
+    letter-spacing:0.06em;
+    color:var(--fire);
+    text-align:center;
+    margin:0 0 4px;
+    text-shadow:0 0 18px rgba(224,139,61,0.25);
+  }
+  .subtitle{
+    text-align:center;
+    color:var(--ink-dim);
+    font-size:13px;
+    margin:0 0 6px;
+    letter-spacing:0.03em;
+  }
+  .prologue{
+    text-align:center;
+    color:var(--ink-dim);
+    font-size:12px;
+    max-width:520px;
+    margin:0 auto 26px;
+    line-height:1.8;
+    font-style:italic;
+  }
+
+  .panels{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:14px;
+    margin-bottom:22px;
+  }
+  @media(max-width:640px){ .panels{grid-template-columns:1fr;} }
+
+  .panel{
+    background:var(--bg-panel);
+    border:1px solid var(--line);
+    border-radius:var(--radius);
+    padding:16px 18px;
+    position:relative;
+    overflow:hidden;
+  }
+  .panel::before{
+    content:"";
+    position:absolute; inset:0;
+    background:linear-gradient(180deg, rgba(255,255,255,0.03), transparent 40%);
+    pointer-events:none;
+  }
+  .panel-label{
+    font-family:var(--font-display);
+    font-size:11px;
+    letter-spacing:0.14em;
+    color:var(--ink-dim);
+    text-transform:uppercase;
+    margin-bottom:10px;
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+  }
+
+  .char-row{display:flex; align-items:center; gap:8px; flex-wrap:wrap;}
+  .char-name-input{
+    background:transparent; border:none; padding:2px 4px;
+    font-family:var(--font-body); font-size:16px; font-weight:700;
+    color:var(--ink); width:140px; border-radius:6px;
+  }
+  .char-name-input::placeholder{color:var(--ink-dim); font-weight:500;}
+  .char-name-input:hover{background:var(--bg-panel-raised);}
+  .lv-badge{
+    font-family:var(--font-mono);
+    background:var(--fire-dim);
+    color:#fff2df;
+    border-radius:6px;
+    padding:2px 8px;
+    font-size:13px;
+    white-space:nowrap;
+  }
+  .loop-badge{
+    font-family:var(--font-mono);
+    background:var(--arcane-dim);
+    color:#eaf4f8;
+    border-radius:6px;
+    padding:2px 8px;
+    font-size:12px;
+    white-space:nowrap;
+  }
+  .boss-badge{
+    font-family:var(--font-mono);
+    background:var(--blood-dim);
+    color:#ffe9e9;
+    border-radius:6px;
+    padding:2px 8px;
+    font-size:11px;
+    white-space:nowrap;
+    animation:pulse 2s infinite;
+  }
+  @keyframes pulse{ 0%,100%{opacity:1;} 50%{opacity:0.6;} }
+  @media (prefers-reduced-motion: reduce){ .boss-badge{animation:none;} }
+
+  .bar-row{margin-top:12px;}
+  .bar-label{
+    display:flex; justify-content:space-between;
+    font-family:var(--font-mono);
+    font-size:11px;
+    color:var(--ink-dim);
+    margin-bottom:4px;
+  }
+  .bar{
+    height:10px;
+    background:#0f0b07;
+    border-radius:6px;
+    overflow:hidden;
+    border:1px solid var(--line);
+  }
+  .bar-fill{height:100%; border-radius:6px; transition:width .5s ease;}
+  .bar-fill.xp{background:linear-gradient(90deg,var(--fire-dim),var(--fire));}
+  .bar-fill.hp-good{background:linear-gradient(90deg,#3d5c39,var(--good));}
+  .bar-fill.mp{background:linear-gradient(90deg,var(--arcane-dim),var(--arcane));}
+  .bar-fill.hp-enemy{background:linear-gradient(90deg,var(--blood-dim),var(--blood));}
+
+  .stat-grid{
+    display:grid; grid-template-columns:repeat(4,1fr);
+    gap:8px; margin-top:14px;
+    font-family:var(--font-mono); font-size:11px; color:var(--ink-dim);
+  }
+  @media(max-width:420px){ .stat-grid{grid-template-columns:repeat(2,1fr);} }
+  .stat-grid b{display:block; color:var(--ink); font-size:14px; margin-top:2px;}
+
+  .area-name{font-size:15px; font-weight:700; color:var(--ink);}
+  .area-desc{font-size:11.5px; color:var(--ink-dim); margin:2px 0 10px;}
+  .enemy-head{display:flex; align-items:center; gap:12px;}
+  .sigil{width:46px; height:46px; flex-shrink:0;}
+  .enemy-name{font-size:15px; font-weight:700;}
+  .enemy-atk{font-size:11px; color:var(--ink-dim); font-family:var(--font-mono);}
+
+  .battle-stage{
+    display:flex; align-items:flex-end; justify-content:space-around;
+    padding:10px 10px 4px;
+    margin-bottom:14px;
+    background:var(--bg-panel);
+    border:1px solid var(--line);
+    border-radius:var(--radius);
+    min-height:130px;
+    position:relative;
+    overflow:visible;
+  }
+  .fighter{ width:90px; height:110px; position:relative; }
+  .fighter svg{ width:100%; height:100%; overflow:visible; }
+  .fighter.idle{ animation: fighter-bob 2.6s ease-in-out infinite; }
+  @keyframes fighter-bob{ 0%,100%{transform:translateY(0);} 50%{transform:translateY(-4px);} }
+  .vs-mark{ font-size:20px; color:var(--ink-dim); align-self:center; padding-bottom:30px; }
+  .player-fighter.attacking{ animation: lunge-right .4s ease; }
+  .enemy-fighter.attacking{ animation: lunge-left .4s ease; }
+  @keyframes lunge-right{ 0%{transform:translateX(0);} 40%{transform:translateX(20px) rotate(-6deg);} 100%{transform:translateX(0);} }
+  @keyframes lunge-left{ 0%{transform:translateX(0);} 40%{transform:translateX(-20px) rotate(6deg);} 100%{transform:translateX(0);} }
+  .fighter.hit{ animation: hit-shake .35s ease; }
+  @keyframes hit-shake{ 0%,100%{transform:translateX(0);} 25%{transform:translateX(-6px);} 50%{transform:translateX(6px);} 75%{transform:translateX(-4px);} }
+  .dmg-float{
+    position:absolute; left:50%; top:6%; transform:translateX(-50%);
+    font-family:var(--font-mono); font-weight:700; font-size:17px;
+    color:var(--blood); pointer-events:none; text-shadow:0 1px 3px rgba(0,0,0,0.6);
+    animation: float-up 1s ease-out forwards;
+  }
+  .dmg-float.heal{ color:var(--good); }
+  .dmg-float.mp{ color:var(--arcane); }
+  .dmg-float.mini{ font-size:11px; top:0; }
+  @keyframes float-up{
+    0%{ opacity:1; transform:translateX(-50%) translateY(0); }
+    100%{ opacity:0; transform:translateX(-50%) translateY(-42px); }
+  }
+  @media (prefers-reduced-motion: reduce){
+    .fighter.idle, .fighter.attacking, .fighter.hit, .dmg-float,
+    .fighter-mini.flash, .impact-burst, .combat-hud.screen-shake{ animation:none !important; }
+  }
+
+  .combat-hud{
+    position:sticky; top:0; z-index:30;
+    background:var(--bg-deep);
+    border-bottom:1px solid var(--line);
+    display:flex; align-items:center; justify-content:space-between;
+    gap:10px; padding:8px 4px; margin:0 0 18px;
+  }
+  .hud-side{ display:flex; align-items:center; gap:8px; flex:1; min-width:0; }
+  .hud-side.reverse{ flex-direction:row-reverse; }
+  .fighter-stack{ position:relative; flex-shrink:0; }
+  .fighter-mini{ width:40px; height:48px; flex-shrink:0; position:relative; }
+  .fighter-mini svg{ width:100%; height:100%; overflow:visible; }
+  .fx-layer{ position:absolute; inset:0; pointer-events:none; overflow:visible; }
+  .hud-info{ flex:1; min-width:0; }
+  .hud-info.right{ text-align:right; }
+  .hud-name{ font-family:var(--font-mono); font-size:11px; color:var(--ink-dim); margin-bottom:3px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .bar.mini{ height:6px; margin-bottom:3px; }
+  .vs-mark.small{ font-size:14px; color:var(--ink-dim); flex-shrink:0; }
+
+  .fighter-mini.flash{ animation: hit-flash .4s ease; }
+  @keyframes hit-flash{
+    0%{ filter:none; }
+    35%{ filter:brightness(2.6) saturate(0.2); }
+    100%{ filter:none; }
+  }
+  .impact-burst{
+    position:absolute; top:40%; left:50%; width:26px; height:26px;
+    transform:translate(-50%,-50%) scale(0.2); border-radius:50%;
+    background:radial-gradient(circle, rgba(255,255,255,0.95) 0%, rgba(255,180,90,0.65) 45%, transparent 72%);
+    opacity:0;
+    animation: impact-pop .4s ease-out forwards;
+  }
+  @keyframes impact-pop{
+    0%{ opacity:0; transform:translate(-50%,-50%) scale(0.2); }
+    30%{ opacity:1; transform:translate(-50%,-50%) scale(1.15); }
+    100%{ opacity:0; transform:translate(-50%,-50%) scale(1.7); }
+  }
+  .combat-hud.screen-shake{ animation: screen-shake-kf .26s ease; }
+  @keyframes screen-shake-kf{
+    0%,100%{ transform:translateX(0); }
+    20%{ transform:translateX(-5px); }
+    40%{ transform:translateX(5px); }
+    60%{ transform:translateX(-3px); }
+    80%{ transform:translateX(3px); }
+  }
+
+  details.collapsible{ margin-bottom:8px; }
+  details.collapsible summary.section-title{
+    cursor:pointer; list-style:none; user-select:none;
+    margin:26px 0 10px;
+  }
+  details.collapsible summary::-webkit-details-marker{ display:none; }
+  details.collapsible summary::before{
+    content:'▸'; display:inline-block; margin-right:6px; color:var(--fire); transition:transform .15s;
+  }
+  details.collapsible[open] summary::before{ transform:rotate(90deg); }
+
+  .menu-row{ display:flex; gap:8px; flex-wrap:wrap; margin:18px 0 14px; }
+  .menu-trigger{ width:auto; }
+  .modal-backdrop{
+    display:none; position:fixed; inset:0; background:rgba(10,7,4,0.72);
+    z-index:90;
+  }
+  .modal-backdrop.show{ display:block; }
+  .modal-panel{
+    display:none; position:fixed; top:50%; left:50%; transform:translate(-50%,-50%);
+    z-index:91; background:var(--bg-panel); border:1px solid var(--line); border-radius:var(--radius);
+    padding:18px; max-width:540px; width:90vw; max-height:82vh; overflow-y:auto;
+    box-shadow:0 10px 44px rgba(0,0,0,0.55);
+  }
+  .modal-panel.show{ display:block; }
+  .modal-panel-head{
+    display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;
+    font-family:var(--font-display); letter-spacing:0.08em; color:var(--fire); font-size:14px;
+  }
+  .modal-close{ width:auto; background:transparent; border:none; color:var(--ink-dim); font-size:18px; padding:2px 8px; line-height:1; }
+  .modal-close:hover{ color:var(--ink); }
+
+  .section-title{
+    font-family:var(--font-display);
+    font-size:14px;
+    letter-spacing:0.08em;
+    color:var(--ink-dim);
+    text-transform:uppercase;
+    margin:26px 0 10px;
+    display:flex; align-items:center; gap:10px;
+  }
+  .section-title::after{content:""; flex:1; height:1px; background:var(--line);}
+
+  .skills-grid, .shop-grid{
+    display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr));
+    gap:10px; margin-bottom:18px;
+  }
+  .skill-card, .item-card{
+    background:var(--bg-panel);
+    border:1px solid var(--line);
+    border-radius:var(--radius);
+    padding:12px 14px;
+  }
+  .skill-card.locked{opacity:0.45;}
+  .job-card{border-color:var(--fire-dim);}
+  .skill-top{display:flex; justify-content:space-between; align-items:center; gap:8px;}
+  .skill-name{font-weight:700; font-size:14px;}
+  .skill-icon{font-size:18px; margin-right:6px;}
+  .skill-desc{font-size:11.5px; color:var(--ink-dim); margin:4px 0 10px;}
+  .skill-cost{font-family:var(--font-mono); font-size:11px; color:var(--arcane);}
+
+  .add-form{
+    display:flex; gap:8px; margin-bottom:10px; flex-wrap:wrap;
+  }
+  .add-form input[type=text]{flex:1; min-width:160px;}
+  .add-form input[type=number]{width:110px;}
+  .bulk-add{margin-bottom:18px;}
+  .bulk-add textarea{
+    width:100%; min-height:90px; resize:vertical;
+    font-family:var(--font-mono); font-size:13px;
+    background:var(--bg-panel-raised); border:1px solid var(--line);
+    color:var(--ink); border-radius:8px; padding:10px 12px;
+  }
+  .bulk-add-row{display:flex; justify-content:space-between; align-items:center; margin-top:6px; gap:8px; flex-wrap:wrap;}
+  .bulk-hint{font-size:11px; color:var(--ink-dim);}
+  #taskInput.enter-armed{ outline:2px solid var(--fire); background:var(--bg-panel); }
+  .bulk-add button{width:auto;}
+
+  input, button, select{
+    font-family:var(--font-body);
+    background:var(--bg-panel-raised);
+    border:1px solid var(--line);
+    color:var(--ink);
+    border-radius:8px;
+    padding:9px 12px;
+    font-size:14px;
+  }
+  input:focus, button:focus, select:focus, textarea:focus{
+    outline:2px solid var(--arcane);
+    outline-offset:1px;
+  }
+  button{
+    cursor:pointer;
+    background:var(--fire-dim);
+    border-color:var(--fire-dim);
+    color:#fff5e8;
+    font-weight:600;
+    transition:filter .15s;
+    width:100%;
+  }
+  button:hover{filter:brightness(1.12);}
+  button.secondary{background:var(--bg-panel-raised); color:var(--ink-dim); font-weight:500;}
+  button.danger{background:var(--blood-dim); border-color:var(--blood-dim);}
+  button.magic{background:var(--arcane-dim); border-color:var(--arcane-dim);}
+  button:disabled{opacity:0.4; cursor:not-allowed;}
+
+  .task{
+    background:var(--bg-panel);
+    border:1px solid var(--line);
+    border-radius:var(--radius);
+    padding:14px 16px;
+    margin-bottom:10px;
+  }
+  .task.done{opacity:0.55;}
+  .task-top{display:flex; justify-content:space-between; align-items:flex-start; gap:10px; flex-wrap:wrap;}
+  .task-name{font-size:15px; font-weight:700;}
+  .task-name.strike{text-decoration:line-through; color:var(--ink-dim);}
+  .task-meta{font-family:var(--font-mono); font-size:11.5px; color:var(--ink-dim); margin-top:3px; display:flex; gap:8px; flex-wrap:wrap; align-items:center;}
+  .genre-badge{
+    background:var(--arcane-dim); color:#eaf4f8; border-radius:5px;
+    padding:1px 7px; font-size:10.5px;
+  }
+  .overdue{color:var(--blood); font-weight:700;}
+  .filter-row{display:flex; align-items:center; gap:8px; margin-bottom:12px; flex-wrap:wrap;}
+  .filter-row select{width:auto;}
+  .combo-live{
+    font-family:var(--font-mono); font-size:11px; color:var(--fire);
+    margin-top:6px;
+  }
+  .task-controls{
+    display:flex; align-items:center; gap:8px; margin-top:12px; flex-wrap:wrap;
+  }
+  .task-controls button{width:auto;}
+  .timer{
+    font-family:var(--font-mono);
+    font-size:20px;
+    letter-spacing:0.05em;
+    min-width:82px;
+  }
+  .timer.over{color:var(--blood);}
+  .timer.under{color:var(--good);}
+
+  .empty{
+    text-align:center; color:var(--ink-dim); font-size:13px;
+    padding:30px 10px; border:1px dashed var(--line); border-radius:var(--radius);
+  }
+
+  .log{
+    font-family:var(--font-mono);
+    font-size:12px;
+    color:var(--ink-dim);
+    max-height:190px;
+    overflow-y:auto;
+    background:var(--bg-panel);
+    border:1px solid var(--line);
+    border-radius:var(--radius);
+    padding:10px 14px;
+  }
+  .log div{margin-bottom:4px; line-height:1.55;}
+  .log .lv{color:var(--fire);}
+  .log .win{color:var(--good);}
+  .log .g{color:var(--gold);}
+  .log .hit{color:var(--blood);}
+  .log .fall{color:var(--blood); font-weight:700;}
+  .log .area{color:var(--arcane);}
+  .log .boss{color:var(--blood); font-weight:700;}
+
+  @media (prefers-reduced-motion: reduce){
+    .bar-fill{transition:none;}
+  }
+</style>
+</head>
+<body data-theme="dark">
+<div class="wrap">
+  <div id="saveError" style="display:none; background:var(--blood-dim); color:#ffe9e9; border:1px solid var(--blood); border-radius:8px; padding:10px 14px; font-size:12.5px; margin-bottom:14px;">
+    ⚠ 記録の保存に失敗しています。通信状況を確認してください（自動で再試行しています）。
+  </div>
+  <h1 class="title">タスクエ<span style="font-size:0.5em; color:var(--ink-dim); font-weight:400; margin-left:8px;">―はてなき遠征―</span></h1>
+  <p class="subtitle">タスクをこなし、強くなり、また次の敵へ。ゴールはない。</p>
+  <p class="prologue">かつて名もなき者たちが安寧を捨て、剣を取った。行く先に終わりはない。ただ、強くなること自体が、彼らの生きる意味だった。</p>
+
+  <div class="combat-hud" id="combatHud">
+    <div class="hud-side">
+      <div class="fighter-stack">
+        <div class="fighter-mini" id="playerFighterMini"></div>
+        <div class="fx-layer" id="playerFighterMiniFx"></div>
+      </div>
+      <div class="hud-info">
+        <div class="hud-name">Lv.<span id="hudLevel"></span></div>
+        <div class="bar mini"><div class="bar-fill hp-good" id="hudHpBar" style="width:100%"></div></div>
+        <div class="bar mini"><div class="bar-fill mp" id="hudMpBar" style="width:100%"></div></div>
+      </div>
+    </div>
+    <div class="vs-mark small">⚔️</div>
+    <div class="hud-side reverse">
+      <div class="hud-info right">
+        <div class="hud-name" id="hudEnemyName"></div>
+        <div class="bar mini"><div class="bar-fill hp-enemy" id="hudEnemyHpBar" style="width:100%"></div></div>
+      </div>
+      <div class="fighter-stack">
+        <div class="fighter-mini" id="enemyFighterMini"></div>
+        <div class="fx-layer" id="enemyFighterMiniFx"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="panels">
+    <div class="panel">
+      <div class="panel-label"><span>冒険者</span><span id="goldDisplay" style="color:var(--gold)"></span></div>
+      <div class="char-row">
+        <input type="text" id="nameInput" class="char-name-input" placeholder="名もなき者" maxlength="20">
+        <span class="lv-badge" id="lvBadge">Lv.1</span>
+        <span class="loop-badge" id="loopBadge" style="display:none;"></span>
+      </div>
+      <div class="bar-row">
+        <div class="bar-label"><span>経験値</span><span id="xpText"></span></div>
+        <div class="bar"><div class="bar-fill xp" id="xpBar" style="width:0%"></div></div>
+      </div>
+      <div class="bar-row">
+        <div class="bar-label"><span>HP</span><span id="hpText"></span></div>
+        <div class="bar"><div class="bar-fill hp-good" id="hpBar" style="width:100%"></div></div>
+      </div>
+      <div class="bar-row">
+        <div class="bar-label"><span>MP</span><span id="mpText"></span></div>
+        <div class="bar"><div class="bar-fill mp" id="mpBar" style="width:100%"></div></div>
+      </div>
+      <div class="stat-grid">
+        <div>攻撃力<b id="atkStat"></b></div>
+        <div>防御力<b id="defStat"></b></div>
+        <div>ジョブ<b id="jobStat"></b></div>
+        <div>期限内率<b id="rateStat"></b></div>
+        <div>🔥コンボ<b id="comboStat"></b></div>
+        <div>完了数<b id="doneStat"></b></div>
+        <div>討伐ボス数<b id="bossCountStat"></b></div>
+        <div>周回<b id="loopStat"></b></div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-label">
+        <span>現在地</span>
+        <span style="display:flex; gap:6px; align-items:center;">
+          <span class="boss-badge" id="bossBadge" style="display:none;"></span>
+          <span id="enemyAtkLabel" class="enemy-atk"></span>
+        </span>
+      </div>
+      <div class="area-name" id="areaName"></div>
+      <div class="area-desc" id="areaDesc"></div>
+      <div class="enemy-head">
+        <svg class="sigil" id="sigil" viewBox="0 0 100 100"></svg>
+        <div class="enemy-name" id="enemyName"></div>
+      </div>
+      <div class="bar-row">
+        <div class="bar-label"><span>敵HP</span><span id="enemyHpText"></span></div>
+        <div class="bar"><div class="bar-fill hp-enemy" id="enemyHpBar" style="width:100%"></div></div>
+      </div>
+      <button class="secondary" id="fleeBtn" style="margin-top:12px;">🏃 退く（安全な場所へ）</button>
+    </div>
+  </div>
+
+  <div class="menu-row">
+    <button class="menu-trigger" data-modal="taskAddModal">＋ タスクを追加</button>
+    <button class="menu-trigger secondary" data-modal="questModal">🗓️ デイリー/ウィークリー</button>
+    <button class="menu-trigger secondary" data-modal="skillsModal">スキル</button>
+    <button class="menu-trigger secondary" data-modal="shopModal">道具・商店</button>
+    <button class="menu-trigger secondary" data-modal="difficultyModal">難易度</button>
+    <button class="menu-trigger secondary" data-modal="reportModal">📊 レポート</button>
+    <button class="menu-trigger secondary" id="soundToggleBtn" style="width:auto;">🔊</button>
+    <button class="menu-trigger secondary" data-modal="syncModal">☁️ 同期</button>
+    <button class="menu-trigger secondary" data-modal="resetModal" style="color:var(--blood);">⚠️ 初期化</button>
+  </div>
+
+  <div class="filter-row">
+    <span class="bulk-hint">ジャンルで絞り込み：</span>
+    <select id="genreFilter"><option value="">すべて</option></select>
+  </div>
+  <div id="taskList"></div>
+
+  <div class="modal-backdrop" id="modalBackdrop"></div>
+
+  <div class="modal-panel" id="taskAddModal">
+    <div class="modal-panel-head"><span>タスクを追加</span><button class="modal-close" data-close>✕</button></div>
+    <div class="add-form">
+      <input type="text" id="taskInput" placeholder="タスク名（例：資料作成）">
+      <input type="number" id="estInput" placeholder="想定分" min="0">
+      <input type="date" id="dateInput">
+      <input type="text" id="genreInput" placeholder="ジャンル(任意)" list="genreList">
+      <datalist id="genreList"></datalist>
+      <label style="display:flex; align-items:center; gap:5px; font-size:12.5px; color:var(--ink-dim);">
+        <input type="checkbox" id="strictInput" checked style="width:auto; padding:0;">工数遵守
+      </label>
+      <select id="recurrenceInput" style="width:auto;">
+        <option value="">繰り返しなし</option>
+        <option value="daily">🔁毎日</option>
+        <option value="weekly">🔁毎週</option>
+      </select>
+      <button id="addBtn" style="width:auto">追加</button>
+    </div>
+    <div class="bulk-hint" style="margin:-6px 0 10px;">工数遵守：オンだと予定超過で威力が落ち、超えるほど弱くなる。オフだと逆に、時間をかけるほど威力が上がる（じっくり型のタスク向け）</div>
+    <div class="bulk-hint" style="margin:-6px 0 10px;">繰り返し：完了した翌日／翌週になると、自動でまた挑戦可能に戻る</div>
+    <div class="bulk-add">
+      <textarea id="bulkInput" placeholder="1行に1つ。末尾に分数を書くと想定時間になります&#10;例：&#10;資料作成 30&#10;議事録送付&#10;見積り確認 15"></textarea>
+      <div class="bulk-add-row">
+        <span class="bulk-hint">1行＝1タスク。末尾の数字は想定分（省略可）。日付・ジャンルは個別追加で設定できます</span>
+        <button id="bulkAddBtn" style="width:auto">まとめて追加</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-panel" id="skillsModal">
+    <div class="modal-panel-head"><span>スキル</span><button class="modal-close" data-close>✕</button></div>
+    <div class="skills-grid" id="skillsGrid"></div>
+  </div>
+
+  <div class="modal-panel" id="shopModal">
+    <div class="modal-panel-head"><span>道具・商店</span><button class="modal-close" data-close>✕</button></div>
+    <div class="shop-grid" id="shopGrid"></div>
+  </div>
+
+  <div class="modal-panel" id="difficultyModal">
+    <div class="modal-panel-head"><span>難易度</span><button class="modal-close" data-close>✕</button></div>
+    <div class="skills-grid" id="difficultyGrid"></div>
+  </div>
+
+  <div class="modal-panel" id="reportModal" style="max-width:640px;">
+    <div class="modal-panel-head"><span>振り返りレポート</span><button class="modal-close" data-close>✕</button></div>
+    <div id="reportBody"></div>
+  </div>
+
+  <div class="modal-panel" id="questModal" style="max-width:600px;">
+    <div class="modal-panel-head"><span>デイリー・ウィークリークエスト</span><button class="modal-close" data-close>✕</button></div>
+    <div class="add-form">
+      <input type="text" id="questInput" placeholder="クエスト名（例：朝の散歩）">
+      <select id="questTypeInput" style="width:auto;">
+        <option value="daily">🗓️毎日</option>
+        <option value="weekly">🗓️毎週</option>
+      </select>
+      <button id="addQuestBtn" style="width:auto">追加</button>
+    </div>
+    <div class="bulk-hint" style="margin:-6px 0 10px;">達成できないまま日付・週が変わると、自動でダメージを受ける</div>
+    <div id="questList"></div>
+  </div>
+
+  <div class="modal-panel" id="syncModal" style="max-width:480px;">
+    <div class="modal-panel-head"><span>☁️ 端末間の同期</span><button class="modal-close" data-close>✕</button></div>
+    <div id="syncBody"></div>
+  </div>
+
+  <div class="modal-panel" id="resetModal" style="max-width:440px;">
+    <div class="modal-panel-head"><span style="color:var(--blood);">⚠️ 進行の初期化</span><button class="modal-close" data-close>✕</button></div>
+    <p style="font-size:13px; color:var(--ink-dim); line-height:1.7;">
+      レベル・ステータス・タスク・アイテムなど、個人の遠征データが全て消え、最初からになる。<br>
+      <strong style="color:var(--ink);">この操作は取り消せない。</strong><br>
+      ギルドに参加している場合、ギルド自体（他のメンバーのデータ）は消えない。
+    </p>
+    <div style="display:flex; gap:8px; margin-top:14px;">
+      <button class="danger" id="confirmResetBtn" style="width:auto;">初期化する</button>
+      <button class="secondary" data-close style="width:auto;">キャンセル</button>
+    </div>
+  </div>
+
+  <div class="section-title">ギルドクエスト</div>
+  <div id="guildJoinSection">
+    <p class="bulk-hint" style="margin-bottom:10px;">個人の遠征とは別に、チームで1体のギルドボスを討伐したり、タスクを担当者付きで共有できる。</p>
+    <div class="add-form">
+      <input type="text" id="guildDisplayName" placeholder="ギルド内での表示名">
+    </div>
+    <div class="add-form">
+      <input type="text" id="guildCodeInput" placeholder="ギルドコード（例：A3F9K2）" style="text-transform:uppercase;">
+      <button id="joinGuildBtn" style="width:auto">参加する</button>
+      <button id="createGuildBtn" class="secondary" style="width:auto">新しいギルドを作る</button>
+    </div>
+    <div id="guildJoinError" style="display:none; color:var(--blood); font-size:12px; margin-top:4px;"></div>
+  </div>
+
+  <div id="guildMainSection" style="display:none;">
+    <div class="panel" style="margin-bottom:14px;">
+      <div class="panel-label">
+        <span>ギルド：<span id="guildNameLabel"></span></span>
+        <button class="secondary" id="leaveGuildBtn" style="width:auto; font-size:12px;">脱退</button>
+      </div>
+      <div class="bulk-hint">コード：<span id="guildCodeLabel" style="font-family:var(--font-mono); color:var(--ink);"></span>（このコードを共有すれば参加できる）</div>
+      <div class="enemy-head" style="margin-top:10px;">
+        <svg class="sigil" id="guildSigil" viewBox="0 0 100 100"></svg>
+        <div class="enemy-name" id="guildBossName"></div>
+      </div>
+      <div class="bar-row">
+        <div class="bar-label"><span>ギルドボスHP</span><span id="guildBossHpText"></span></div>
+        <div class="bar"><div class="bar-fill hp-enemy" id="guildBossHpBar" style="width:100%"></div></div>
+      </div>
+    </div>
+
+    <div class="section-title">メンバー貢献度</div>
+    <div id="guildMembers" class="skills-grid"></div>
+
+    <div class="section-title">ギルド記録</div>
+    <div class="log" id="guildLog"></div>
+
+    <div class="section-title">ギルドタスク</div>
+    <div class="add-form">
+      <input type="text" id="guildTaskInput" placeholder="タスク名（例：資料作成）">
+      <input type="number" id="guildEstInput" placeholder="想定分" min="0">
+      <select id="guildAssigneeInput"><option value="">担当者未定</option></select>
+      <button id="addGuildTaskBtn" style="width:auto">追加</button>
+    </div>
+    <div id="guildTaskList"></div>
+  </div>
+
+  <div id="jobChoiceSection" style="display:none;">
+    <div class="section-title">運命の選択</div>
+    <div class="skills-grid" id="jobGrid"></div>
+  </div>
+
+  <div class="section-title">遠征記録</div>
+  <div class="log" id="log"></div>
+</div>
+
+<script>
+(function(){
+  const STORE_KEY = 'rpg-todo-state-v1';
+  const JOB_UNLOCK_LEVEL = 3;
+  const JOB_RESPEC_LEVEL = 10;
+  let state = null;
+  let timerInterval = null;
+
+  // --- ギルド（共有）関連 ---
+  const firebaseConfig = {
+    apiKey: "AIzaSyAIPpLPUUQ55Z1LawekA8apXroMsw-eLWc",
+    authDomain: "tasque-9297e.firebaseapp.com",
+    projectId: "tasque-9297e",
+    storageBucket: "tasque-9297e.firebasestorage.app",
+    messagingSenderId: "270084914897",
+    appId: "1:270084914897:web:f200e76447bb878abdcff0"
+  };
+  let db = null;
+  try{
+    if(window.firebase){
+      firebase.initializeApp(firebaseConfig);
+      db = firebase.firestore();
+    } else {
+      console.warn('Firebase SDKが読み込まれていない（window.firebaseが未定義）。ギルド機能は使えない。');
+    }
+  }catch(e){
+    console.error('Firebase初期化エラー:', e);
+  }
+
+  let guildState = null;
+  let guildUnsub = null;
+  let pendingGuildTaskDeleteId = null;
+
+  const SKILLS = [
+    {id:'heal', name:'ヒール', icon:'✚', reqLevel:2, mpCost:8, kind:'heal', desc:'HPをやや回復する'},
+    {id:'firebolt', name:'ファイアボルト', icon:'🔥', reqLevel:4, mpCost:10, kind:'attack', desc:'敵に追加ダメージを与える'},
+    {id:'greaterheal', name:'エクストラヒール', icon:'✨', reqLevel:8, mpCost:18, kind:'heal', desc:'HPを全回復する'},
+    {id:'meteor', name:'メテオ', icon:'☄️', reqLevel:14, mpCost:22, kind:'attack', desc:'敵に大ダメージを与える'}
+  ];
+
+  const JOBS = [
+    {id:'swordsman', name:'剣士', icon:'⚔️', tagline:'力こそ全て。真正面から打ち倒す。', desc:'攻撃力+25%／最大HP+15%', atkMul:1.25, hpMul:1.15},
+    {id:'sage', name:'賢者', icon:'📖', tagline:'魔を極め、術で戦況を変える。', desc:'最大MP+50%／スキル威力+30%', mpMul:1.5, skillMul:1.3},
+    {id:'scout', name:'密偵', icon:'🗡️', tagline:'見積もりの妙こそ、我が武器。', desc:'予定内討伐の恩恵+25%／獲得ゴールド+25%', onTimeMul:1.25, goldMul:1.25},
+    {id:'paladin', name:'聖騎士', icon:'🛡️', tagline:'守りに長け、崩れず進み続ける。', desc:'防御力+35%／回復効果+30%', defMul:1.35, healMul:1.3}
+  ];
+
+  const AREAS = [
+    {min:1, max:3, name:'始まりの森', desc:'そよ風の吹く、冒険の始まりの地。',
+      story:'夜明けと共に、最初の一歩を森の奥へ踏み入れる。魔物の気配はまだ弱く、恐れるものは少ない。',
+      pool:['スライム','野犬','小鬼']},
+    {min:4, max:7, name:'蒼き洞窟', desc:'薄暗く、水音が反響する地下水脈。',
+      story:'地上の光が届かぬ洞窟へ。水滴の音だけが、次の一歩を促してくる。',
+      pool:['ゴブリン戦士','大蜘蛛','山賊']},
+    {min:8, max:9, name:'陽炎の砂漠', desc:'陽炎揺らめく、乾いた大地。',
+      story:'焼けた砂を踏みしめ、揺らめく陽炎の奥へと進む。渇きこそが、ここでの最大の敵かもしれない。',
+      pool:['砂喰いの大蠍','蜃気楼の魔人','乾いた骸骨兵']},
+    {min:10, max:11, name:'灼熱の峡谷', desc:'熱風が肌を焼く、荒々しい峡谷地帯。',
+      story:'焼けた岩肌が続く峡谷。ここに棲む者たちは、生きることそのものに飢えている。',
+      pool:['オーガ','石の番人','堕ちた騎士']},
+    {min:12, max:14, name:'大河の渡し', desc:'大河が道を阻む、水と共にある地。',
+      story:'滔々と流れる大河のほとりへ。渡し守も、渡し舟もない。己の足で渡るしかない。',
+      pool:['水衣の亡霊','巨大鰐','流れの精霊']},
+    {min:15, max:19, name:'凍える尾根', desc:'吹雪が視界を奪う、氷の稜線。',
+      story:'吹雪の尾根に、体温よりも先に心が凍えそうになる。それでも足を止める理由はない。',
+      pool:['ワイバーン','死霊術師','鋼鉄巨兵']},
+    {min:20, max:9999, name:'龍の帰所', desc:'伝説だけが語られる、竜たちの棲家。',
+      story:'伝説の眠る地。ここから先、地図はない。深さこそが、この地の物語そのものだ。',
+      pool:['古竜','深淵の王','終焉の影']}
+  ];
+
+  // 屋外（森・砂漠・峡谷・川・尾根）はライトベース、洞窟・竜の帰所はダークベースの配色にする
+  const AREA_THEME = {
+    '始まりの森':   {mode:'light', sky:'#bfe0f2', ground:'#8fc97a'},
+    '蒼き洞窟':     {mode:'dark',  glow1:'#1f5570', glow2:'#123044'},
+    '陽炎の砂漠':   {mode:'light', sky:'#ffe9b8', ground:'#e0b56a'},
+    '灼熱の峡谷':   {mode:'dark',  glow1:'#6b1f0a', glow2:'#26100a'},
+    '大河の渡し':   {mode:'light', sky:'#cfeaf5', ground:'#5fb3c9'},
+    '凍える尾根':   {mode:'light', sky:'#eaf6ff', ground:'#a9d4ec'},
+    '龍の帰所':     {mode:'dark',  glow1:'#4a2a68', glow2:'#2a1638'}
+  };
+
+  const DARK_BASE = { bgDeep:'#1b140c', bgPanel:'#1e1710', bgPanelRaised:'#251c13', line:'#3a2c1a', ink:'#ece1cb', inkDim:'#a7967a', fire:'#e08b3d', fireDim:'#8a5a28', blood:'#a83232', bloodDim:'#5c2222', arcane:'#5c8aa1', arcaneDim:'#365a68', gold:'#c9a227', good:'#5f8a5a' };
+  const LIGHT_BASE = { bgDeep:'#eef3ec', bgPanel:'#ffffff', bgPanelRaised:'#f4f1e6', line:'#d9d4c2', ink:'#2a2a20', inkDim:'#6e6b58', fire:'#c8701e', fireDim:'#a85a18', blood:'#a13030', bloodDim:'#7a2424', arcane:'#2f6a86', arcaneDim:'#245268', gold:'#9c7418', good:'#3d7238' };
+
+  function areaBaseName(name){ return name.split(' ')[0]; }
+  function applyAreaTheme(level){
+    const theme = AREA_THEME[areaBaseName(getArea(level).name)] || AREA_THEME['始まりの森'];
+    const root = document.documentElement.style;
+    const mode = theme.mode || 'dark';
+    document.body.setAttribute('data-theme', mode);
+    if(mode === 'light'){
+      root.setProperty('--area-sky', theme.sky);
+      root.setProperty('--area-ground', theme.ground);
+    } else {
+      root.setProperty('--area-glow-1', theme.glow1);
+      root.setProperty('--area-glow-2', theme.glow2);
+    }
+    const base = mode === 'light' ? LIGHT_BASE : DARK_BASE;
+    root.setProperty('--bg-deep', base.bgDeep);
+    root.setProperty('--bg-panel', base.bgPanel);
+    root.setProperty('--bg-panel-raised', base.bgPanelRaised);
+    root.setProperty('--line', base.line);
+    root.setProperty('--ink', base.ink);
+    root.setProperty('--ink-dim', base.inkDim);
+    root.setProperty('--fire', base.fire);
+    root.setProperty('--fire-dim', base.fireDim);
+    root.setProperty('--blood', base.blood);
+    root.setProperty('--blood-dim', base.bloodDim);
+    root.setProperty('--arcane', base.arcane);
+    root.setProperty('--arcane-dim', base.arcaneDim);
+    root.setProperty('--gold', base.gold);
+    root.setProperty('--good', base.good);
+  }
+
+  // --- 戦闘ビジュアル（自機・敵のSVGイラストとエモート） ---
+  const ENEMY_ARCHETYPE = {'始まりの森':0, '蒼き洞窟':1, '陽炎の砂漠':2, '灼熱の峡谷':2, '大河の渡し':1, '凍える尾根':3, '龍の帰所':4};
+  const ENEMY_FILL = {'始まりの森':'#5a7a48', '蒼き洞窟':'#3a6a80', '陽炎の砂漠':'#c9973f', '灼熱の峡谷':'#8a2f14', '大河の渡し':'#2f7a8a', '凍える尾根':'#5f9ab8', '龍の帰所':'#6a4a8a'};
+
+  function playerWeaponSvg(jobId){
+    switch(jobId){
+      case 'swordsman': return `<rect x="72" y="28" width="6" height="52" rx="2" fill="var(--ink-dim)"/><rect x="64" y="28" width="22" height="6" rx="2" fill="var(--ink-dim)"/>`;
+      case 'sage': return `<rect x="74" y="12" width="5" height="76" rx="2" fill="var(--arcane)"/><circle cx="76.5" cy="10" r="7" fill="var(--arcane)"/>`;
+      case 'scout': return `<rect x="70" y="35" width="5" height="30" rx="2" fill="var(--ink-dim)" transform="rotate(20 72 50)"/><rect x="25" y="35" width="5" height="30" rx="2" fill="var(--ink-dim)" transform="rotate(-20 27 50)"/>`;
+      case 'paladin': return `<rect x="14" y="35" width="16" height="26" rx="4" fill="var(--arcane-dim)" stroke="var(--gold)" stroke-width="1.5"/>`;
+      default: return `<rect x="72" y="38" width="5" height="35" rx="2" fill="var(--ink-dim)"/>`;
+    }
+  }
+  function drawPlayerSvg(){
+    return `<svg viewBox="0 0 100 120" xmlns="http://www.w3.org/2000/svg">
+      <ellipse cx="50" cy="106" rx="20" ry="6" fill="#000" opacity="0.25"/>
+      ${playerWeaponSvg(state.job)}
+      <path d="M50 28 C36 28 28 44 28 60 L28 96 C28 106 38 112 50 112 C62 112 72 106 72 96 L72 60 C72 44 64 28 50 28 Z" fill="var(--fire-dim)" stroke="var(--fire)" stroke-width="2"/>
+      <circle cx="50" cy="20" r="15" fill="var(--fire-dim)" stroke="var(--fire)" stroke-width="2"/>
+      <circle cx="44" cy="20" r="2" fill="var(--ink)"/>
+      <circle cx="56" cy="20" r="2" fill="var(--ink)"/>
+    </svg>`;
+  }
+
+  function drawEnemySvg(level){
+    const areaName = areaBaseName(getArea(level).name);
+    const archetype = ENEMY_ARCHETYPE[areaName] ?? 0;
+    const fill = ENEMY_FILL[areaName] || '#5a7a48';
+    const isBoss = !!state.activeBoss;
+    const spikes = Math.min(2 + Math.floor(level/4), 8);
+    const eyeColor = isBoss ? 'var(--blood)' : '#fff2df';
+    const scale = isBoss ? 1.15 : 1.0;
+    let spikeMarkup = '';
+    for(let i=0;i<spikes;i++){
+      const x = 30 + (i*(40/Math.max(spikes-1,1)));
+      spikeMarkup += `<polygon points="${x},35 ${x-4},20 ${x+4},20" fill="${fill}" stroke="var(--ink-dim)" stroke-width="0.5"/>`;
+    }
+    let bodyMarkup = '';
+    if(archetype===0){
+      bodyMarkup = `<ellipse cx="50" cy="70" rx="34" ry="30" fill="${fill}" stroke="var(--ink-dim)" stroke-width="2"/>`;
+    } else if(archetype===1){
+      bodyMarkup = `
+        <line x1="20" y1="90" x2="35" y2="70" stroke="${fill}" stroke-width="4"/>
+        <line x1="80" y1="90" x2="65" y2="70" stroke="${fill}" stroke-width="4"/>
+        <line x1="15" y1="70" x2="32" y2="62" stroke="${fill}" stroke-width="4"/>
+        <line x1="85" y1="70" x2="68" y2="62" stroke="${fill}" stroke-width="4"/>
+        <ellipse cx="50" cy="60" rx="26" ry="24" fill="${fill}" stroke="var(--ink-dim)" stroke-width="2"/>`;
+    } else if(archetype===2){
+      bodyMarkup = `
+        <rect x="26" y="45" width="48" height="50" rx="10" fill="${fill}" stroke="var(--ink-dim)" stroke-width="2"/>
+        <rect x="10" y="55" width="16" height="30" rx="6" fill="${fill}" stroke="var(--ink-dim)" stroke-width="2"/>
+        <rect x="74" y="55" width="16" height="30" rx="6" fill="${fill}" stroke="var(--ink-dim)" stroke-width="2"/>
+        <polygon points="40,60 36,72 44,68" fill="#fff2df"/>
+        <polygon points="60,60 64,72 56,68" fill="#fff2df"/>`;
+    } else if(archetype===3){
+      bodyMarkup = `
+        <polygon points="50,50 10,30 30,60" fill="${fill}" opacity="0.85"/>
+        <polygon points="50,50 90,30 70,60" fill="${fill}" opacity="0.85"/>
+        <ellipse cx="50" cy="65" rx="22" ry="26" fill="${fill}" stroke="var(--ink-dim)" stroke-width="2"/>
+        <line x1="50" y1="90" x2="42" y2="108" stroke="${fill}" stroke-width="5"/>`;
+    } else {
+      bodyMarkup = `
+        <polygon points="50,45 5,20 28,55" fill="${fill}" opacity="0.9"/>
+        <polygon points="50,45 95,20 72,55" fill="${fill}" opacity="0.9"/>
+        <ellipse cx="50" cy="65" rx="25" ry="28" fill="${fill}" stroke="var(--blood)" stroke-width="2"/>
+        <line x1="50" y1="92" x2="38" y2="112" stroke="${fill}" stroke-width="6"/>
+        <polygon points="38,112 32,118 42,116" fill="${fill}"/>
+        <polygon points="38,30 34,15 42,22" fill="${fill}"/>
+        <polygon points="62,30 66,15 58,22" fill="${fill}"/>`;
+    }
+    return `<svg viewBox="0 0 100 120" xmlns="http://www.w3.org/2000/svg" style="transform:scale(${scale})">
+      <ellipse cx="50" cy="108" rx="24" ry="6" fill="#000" opacity="0.25"/>
+      ${spikeMarkup}
+      ${bodyMarkup}
+      <circle cx="42" cy="63" r="3" fill="${eyeColor}"/>
+      <circle cx="58" cy="63" r="3" fill="${eyeColor}"/>
+    </svg>`;
+  }
+
+  function updateFighterSprites(){
+    const pm = document.getElementById('playerFighterMini');
+    const em = document.getElementById('enemyFighterMini');
+    if(pm) pm.innerHTML = drawPlayerSvg();
+    if(em) em.innerHTML = drawEnemySvg(state.level);
+  }
+
+  // Fxレイヤーは常にDOMに残り続け、updateFighterSpritesのinnerHTML書き換えの影響を受けない
+  function floatText(targetId, text, cls){
+    const target = document.getElementById(targetId);
+    if(!target) return;
+    const el = document.createElement('div');
+    el.className = 'dmg-float mini' + (cls ? ' '+cls : '');
+    el.textContent = text;
+    target.appendChild(el);
+    setTimeout(()=>{ el.remove(); }, 1000);
+  }
+
+  function spawnImpactBurst(targetId){
+    const target = document.getElementById(targetId);
+    if(!target) return;
+    const el = document.createElement('div');
+    el.className = 'impact-burst';
+    target.appendChild(el);
+    setTimeout(()=>{ el.remove(); }, 400);
+  }
+
+  function flashHit(spriteId){
+    const el = document.getElementById(spriteId);
+    if(!el) return;
+    el.classList.add('hit', 'flash');
+    setTimeout(()=>{ el.classList.remove('hit', 'flash'); }, 400);
+  }
+
+  function shakeScreen(){
+    const hud = document.getElementById('combatHud');
+    if(!hud) return;
+    hud.classList.add('screen-shake');
+    setTimeout(()=>hud.classList.remove('screen-shake'), 260);
+  }
+
+  function playAttackEmote(dmg){
+    const p = document.getElementById('playerFighterMini');
+    if(p){ p.classList.add('attacking'); setTimeout(()=>p.classList.remove('attacking'), 400); }
+    flashHit('enemyFighterMini');
+    spawnImpactBurst('enemyFighterMiniFx');
+    floatText('enemyFighterMiniFx', '-'+dmg);
+  }
+  function playCounterEmote(dmg){
+    flashHit('playerFighterMini');
+    spawnImpactBurst('playerFighterMiniFx');
+    floatText('playerFighterMiniFx', '-'+dmg);
+    shakeScreen();
+  }
+  function playHealEmote(amount, isMp){
+    floatText('playerFighterMiniFx', '+'+amount, isMp ? 'mp' : 'heal');
+  }
+
+  // --- 効果音（Web Audio APIで自前合成。音声ファイルは使わない） ---
+  let audioCtx = null;
+  function getAudioCtx(){
+    if(!audioCtx){
+      try{ audioCtx = new (window.AudioContext || window.webkitAudioContext)(); }
+      catch(e){ return null; }
+    }
+    if(audioCtx.state === 'suspended'){ audioCtx.resume().catch(()=>{}); }
+    return audioCtx;
+  }
+  function playTone(freq, duration, type, startTime, gainPeak){
+    if(!state || !state.soundOn) return;
+    const ctx = getAudioCtx();
+    if(!ctx) return;
+    const t0 = ctx.currentTime + (startTime||0);
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = type || 'sine';
+    osc.frequency.setValueAtTime(freq, t0);
+    gain.gain.setValueAtTime(0, t0);
+    gain.gain.linearRampToValueAtTime(gainPeak||0.14, t0+0.01);
+    gain.gain.exponentialRampToValueAtTime(0.001, t0+duration);
+    osc.connect(gain); gain.connect(ctx.destination);
+    osc.start(t0); osc.stop(t0+duration+0.03);
+  }
+  function sfxAttack(){ playTone(180,0.12,'square',0,0.12); playTone(90,0.15,'square',0.02,0.08); }
+  function sfxCounter(){ playTone(130,0.18,'sawtooth',0,0.12); }
+  function sfxHeal(){ [440,660,880].forEach((f,i)=>playTone(f,0.14,'sine',i*0.08,0.08)); }
+  function sfxLevelUp(){ [523,659,784,1047].forEach((f,i)=>playTone(f,0.18,'triangle',i*0.09,0.12)); }
+  function sfxDefeatEnemy(){ [392,494,587].forEach((f,i)=>playTone(f,0.15,'triangle',i*0.08,0.11)); }
+  function sfxBossDefeat(){ [392,494,587,784].forEach((f,i)=>playTone(f,0.2,'triangle',i*0.1,0.14)); }
+  function sfxFall(){ playTone(220,0.3,'sawtooth',0,0.12); playTone(140,0.35,'sawtooth',0.12,0.1); }
+  function sfxClick(){ playTone(600,0.05,'square',0,0.05); }
+
+  const STORY_DEEP = [
+    '第一層で見た竜は、まだ序の口だったと知る。',
+    '空気が薄くなるほど、気配は濃くなっていく。',
+    'ここより先、生きて戻った者の記録はない。それでも進む。',
+    '深さは恐怖ではなく、これまで積み重ねた強さの証だ。'
+  ];
+
+  const MILESTONES = [
+    '何度倒れても、また立ち上がる。それがこの遠征の掟だ。',
+    '積み重ねた工程の数だけ、剣は重みを増していく。',
+    '強さとは、昨日の自分に勝ち続けることだ。',
+    '終わりを求めないのなら、進むこと自体が答えになる。'
+  ];
+
+  // ボス定義。同じlevelに複数ある場合は順番に出現する（例：ラスボスの直後に裏ボス）
+  // 小ボス(mini)：5刻み／中ボス(mid)：10刻み／大ボス(major)：節目／ラスボス：Lv.99／裏ボス：Lv.999
+  const BOSSES = [
+    {level:5,  kind:'mini', name:'牙の族長・グロム', hpMul:2.5, atkMul:1.30,
+      story:'蒼き洞窟の入口を塞ぐ、獣の王が牙を剥く。'},
+    {level:10, kind:'mini', name:'業火の百足・イフリータ', hpMul:2.6, atkMul:1.32,
+      story:'峡谷に潜む百足の魔物が、灼熱を纏って現れる。'},
+    {level:15, kind:'mini', name:'氷牙の女王・リーム', hpMul:2.7, atkMul:1.34,
+      story:'尾根の吹雪そのものが、女王の姿を取って立ちはだかる。'},
+    {level:20, kind:'mini', name:'門番竜・ヴァルガ', hpMul:2.8, atkMul:1.36,
+      story:'龍の帰所の門を守る番竜が、道を阻む。'},
+    {level:25, kind:'mini', name:'深潭の主・ネレイス', hpMul:2.9, atkMul:1.38,
+      story:'霧を纏う深潭の主が、水底からその双眸を向ける。'},
+    {level:30, kind:'mini', name:'骸奏者・ドルガン', hpMul:3.0, atkMul:1.40,
+      story:'骨の音色を奏でる骸の術者が、闇の中で笑う。'},
+    {level:35, kind:'mini', name:'灰塵の巨兵・バロス', hpMul:3.1, atkMul:1.42,
+      story:'灰と共に歩む巨兵が、踏み出すたびに大地を割る。'},
+    {level:40, kind:'mini', name:'呪縛の女帝・イゾルデ', hpMul:3.2, atkMul:1.44,
+      story:'呪いを纏った女帝が、道行く者の足を縛る。'},
+    {level:50, kind:'mid', name:'血氷の竜騎兵・ガルーダ', hpMul:3.6, atkMul:1.55,
+      story:'血に染まった氷の竜騎兵が、翼を広げて舞い降りる。'},
+    {level:60, kind:'mid', name:'万魔殿の門番・ベリアル', hpMul:3.9, atkMul:1.60,
+      story:'無数の魔を統べる門番が、静かに、しかし確かに立ちはだかる。'},
+    {level:70, kind:'mid', name:'星喰いの怪魚・レヴィア', hpMul:4.2, atkMul:1.65,
+      story:'星々を喰らうという怪魚が、深淵の底より姿を見せる。'},
+    {level:80, kind:'mid', name:'終末の使者・アザゼル', hpMul:4.5, atkMul:1.70,
+      story:'終末を告げる使者が、その翼を焼き尽くしながら降りてくる。'},
+    {level:90, kind:'major', name:'天墜の竜帝・ネフィリウス', hpMul:5.2, atkMul:1.85,
+      story:'かつて天より墜ちた竜の帝が、伝説の果てへ至る最後の関門として立つ。'},
+    {level:99, kind:'final', name:'終焉の古竜王・ゾルギア', hpMul:6.5, atkMul:2.00,
+      story:'百の関門を超えた者だけが辿り着く、伝説の果て。全てを喰らう古竜王が、その姿を現す。'},
+    {level:999, kind:'secret', name:'???（この地の真の主）', hpMul:10, atkMul:2.50,
+      story:'古竜王が斃れたその瞬間、地の底からもう一つの気配が這い上がる。これこそが、この地の真の主だったのかもしれない――だが、その本当の姿を見る者は、気の遠くなるほど遠い道の果てにしかいない。'}
+  ];
+
+  function defaultState(){
+    return {
+      name:'', job:null, pendingJobChoice:false,
+      jobOnTimeMul:1, jobGoldMul:1, jobSkillMul:1, jobHealMul:1,
+      jobStatBonus:{atk:0, maxHp:0, maxMp:0, def:0},
+      level:1, xp:0, hp:30, maxHp:30, mp:20, maxMp:20, atk:5, def:2, gold:0,
+      tasksCompleted:0, onTimeCompleted:0,
+      inventory:{hpPotion:0, mpPotion:0},
+      tasks:[],
+      quests:[],
+      logs:[],
+      enemyHpCurrent:null,
+      activeBoss:null,
+      bossStage:0,
+      loopCount:0,
+      loopGrowth:1,
+      comboCount:0,
+      bossesDefeated:0,
+      updatedAt:0,
+      difficulty:'normal',
+      guildCode:null, guildDisplayName:'',
+      syncCode:null,
+      soundOn:true,
+      totalXpEarned:0, totalGoldEarned:0
+    };
+  }
+
+  let filterGenre = '';
+  let pendingDeleteId = null;
+  let pendingFailId = null;
+  let pendingEditId = null;
+  const DEFAULT_GENRES = ['仕事','私用','学習','家事','健康'];
+  const GENRE_COLORS = ['#e08b3d','#5c8aa1','#a83232','#5f8a5a','#c9a227','#8a5ac8','#4fb0a5','#c2577a'];
+  function genreColor(g){
+    if(!g) return 'var(--arcane-dim)';
+    let hash = 0;
+    for(let i=0;i<g.length;i++){ hash = (hash*31 + g.charCodeAt(i)) % 100000; }
+    return GENRE_COLORS[hash % GENRE_COLORS.length];
+  }
+
+  function pname(){ return (state.name && state.name.trim()) ? state.name.trim() : '名もなき者'; }
+
+  function xpToNext(level){
+    if(level <= 99) return Math.round(50 * Math.pow(level,1.3));
+    // Lv.100以降は「本編を終えた後の長い道」として、なだらかな一定ペースにする。
+    // これにより裏ボス（Lv.999）も、時間はかかるが本当に届く目標になる。
+    return 2000;
+  }
+  const DIFFICULTY = {
+    easy:   {label:'易しい', hpMul:0.7, atkMul:0.7, rewardMul:0.9,  desc:'敵のHP・攻撃力 -30%／報酬 -10%。じっくり進めたい人向け。'},
+    normal: {label:'標準',   hpMul:1.0, atkMul:1.0, rewardMul:1.0,  desc:'現在の標準バランス。'},
+    hard:   {label:'難しい', hpMul:1.3, atkMul:1.3, rewardMul:1.15, desc:'敵のHP・攻撃力 +30%／報酬 +15%。しっかり手応えを求める人向け。'}
+  };
+  function diff(){ return DIFFICULTY[state.difficulty] || DIFFICULTY.normal; }
+
+  function enemyMaxHp(level){ return Math.round(30 * Math.pow(level,1.15) * state.loopGrowth * diff().hpMul); }
+  function enemyAtk(level){ return Math.round((3 + level*1.3) * state.loopGrowth * diff().atkMul); }
+  function maxMpForLevel(level){ return Math.round((20 + (level-1)*4) * state.loopGrowth); }
+
+  function getArea(level){
+    const base = AREAS.find(a=>level>=a.min && level<=a.max) || AREAS[AREAS.length-1];
+    if(base.max === 9999){
+      const depth = Math.floor((level-base.min)/5) + 1;
+      if(depth > 1){
+        return Object.assign({}, base, {
+          name: base.name + ' 第' + depth + '層',
+          story: STORY_DEEP[(depth-2) % STORY_DEEP.length]
+        });
+      }
+    }
+    return base;
+  }
+  function regularEnemyName(level){
+    const a = getArea(level);
+    const idx = (level-1) % a.pool.length;
+    return a.pool[idx] + ' Lv.' + level;
+  }
+
+  function bossesAtLevel(level){ return BOSSES.filter(b=>b.level===level); }
+  function hasPendingBoss(){
+    const bh = bossesAtLevel(state.level);
+    return bh.length > 0 && state.bossStage < bh.length;
+  }
+  function currentEnemyMaxHp(){
+    return state.activeBoss ? Math.round(enemyMaxHp(state.level)*state.activeBoss.hpMul) : enemyMaxHp(state.level);
+  }
+  function currentEnemyAtk(){
+    return state.activeBoss ? Math.round(enemyAtk(state.level)*state.activeBoss.atkMul) : enemyAtk(state.level);
+  }
+  function currentEnemyName(){
+    return state.activeBoss ? state.activeBoss.name : regularEnemyName(state.level);
+  }
+
+  function fmtTime(sec){
+    sec = Math.max(0, Math.floor(sec));
+    const m = String(Math.floor(sec/60)).padStart(2,'0');
+    const s = String(sec%60).padStart(2,'0');
+    return m+':'+s;
+  }
+
+  // window.storageはClaude.aiのアーティファクト内でのみ使える機能。
+  // ローカルでこのHTMLを直接開いた場合はそれが存在しないため、localStorageに保存する。
+  async function storageGet(key){
+    if(window.storage && typeof window.storage.get === 'function'){
+      try{
+        const res = await window.storage.get(key, false);
+        if(res) return res;
+      }catch(e){ /* Claude.ai側が使えない場合はlocalStorageを試す */ }
+    }
+    try{
+      const raw = localStorage.getItem(key);
+      return raw ? {key, value:raw, shared:false} : null;
+    }catch(e){
+      return null;
+    }
+  }
+
+  async function storageSet(key, value){
+    let ok = false;
+    if(window.storage && typeof window.storage.set === 'function'){
+      try{
+        const r = await window.storage.set(key, value, false);
+        if(r) ok = true;
+      }catch(e){ /* 失敗したらlocalStorageに賭ける */ }
+    }
+    try{
+      localStorage.setItem(key, value);
+      ok = true;
+    }catch(e){ /* localStorageも使えない環境 */ }
+    return ok;
+  }
+
+  async function loadState(){
+    try{
+      const res = await storageGet(STORE_KEY);
+      if(res && res.value){
+        state = JSON.parse(res.value);
+      } else {
+        state = defaultState();
+      }
+    }catch(e){
+      state = defaultState();
+    }
+    const d = defaultState();
+    Object.keys(d).forEach(k=>{
+      if(state[k] === undefined) state[k] = d[k];
+    });
+    if(!state.inventory) state.inventory = {hpPotion:0, mpPotion:0};
+    state.tasks.forEach(t=>{ if(t.running){ t.running=false; } });
+    if(state.enemyHpCurrent == null){
+      spawnEncounter(false);
+    }
+    refreshRecurringTasks();
+    refreshQuests();
+  }
+
+  function refreshRecurringTasks(){
+    const now = Date.now();
+    const DAY = 24*60*60*1000;
+    let anyRefreshed = false;
+    state.tasks.forEach(t=>{
+      if(!t.recurrence || !t.completed || !t.completedAt) return;
+      const interval = t.recurrence === 'weekly' ? 7*DAY : DAY;
+      if(now - t.completedAt >= interval){
+        t.completed = false;
+        t.elapsedSeconds = 0;
+        t.running = false;
+        t.startedAt = null;
+        anyRefreshed = true;
+        addLog(`<span class="area">🔁「${escapeHtml(t.name)}」が再び挑戦可能になった。</span>`);
+      }
+    });
+    if(anyRefreshed) saveState();
+  }
+
+  // --- デイリー・ウィークリークエスト ---
+  function addQuest(name, type){
+    const todayStart = new Date(); todayStart.setHours(0,0,0,0);
+    if(!state.quests) state.quests = [];
+    state.quests.push({
+      id: 'q'+Date.now()+Math.random().toString(36).slice(2,7),
+      name, type: type==='weekly' ? 'weekly' : 'daily',
+      completed:false,
+      periodStart: todayStart.getTime()
+    });
+  }
+
+  function refreshQuests(){
+    if(!state.quests || state.quests.length===0) return;
+    const now = Date.now();
+    const todayStart = new Date(); todayStart.setHours(0,0,0,0);
+    const DAY = 24*60*60*1000;
+    let anyChanged = false;
+    state.quests.forEach(q=>{
+      if(!q.periodStart) q.periodStart = todayStart.getTime();
+      const periodMs = q.type==='weekly' ? 7*DAY : DAY;
+      if(now >= q.periodStart + periodMs){
+        if(!q.completed){
+          applyQuestFailurePenalty(q);
+        }
+        q.completed = false;
+        q.periodStart = todayStart.getTime();
+        anyChanged = true;
+      }
+    });
+    if(anyChanged) saveState();
+  }
+
+  function applyQuestFailurePenalty(q){
+    const dmg = Math.max(3, Math.round(state.maxHp*0.08));
+    state.hp = Math.max(0, state.hp - dmg);
+    state.comboCount = 0;
+    addLog(`<span class="fall">クエスト「${escapeHtml(q.name)}」が未達成のまま${q.type==='weekly'?'週':'日付'}が変わった。${dmg}のダメージを受けた。</span>`);
+    if(state.hp <= 0){ handlePlayerDefeat(); }
+  }
+
+  function completeQuest(id){
+    const q = (state.quests||[]).find(q=>q.id===id);
+    if(!q || q.completed) return;
+    q.completed = true;
+    const baseXp = q.type==='weekly' ? 60 : 15;
+    const multiplier = 1.3;
+    const xpGain = Math.round(baseXp * multiplier * diff().rewardMul);
+    const dmg = Math.round(state.atk * multiplier);
+    const goldGain = Math.round(xpGain/2 * state.jobGoldMul);
+    state.xp += xpGain;
+    state.gold += goldGain;
+    state.totalXpEarned = (state.totalXpEarned||0) + xpGain;
+    state.totalGoldEarned = (state.totalGoldEarned||0) + goldGain;
+    addLog(`「${escapeHtml(q.name)}」を達成した！ +${xpGain}XP <span class="g">+${goldGain}G</span>`);
+    const defeated = damageEnemy(dmg, '習慣の一撃を放った。');
+    if(!defeated){ enemyCounterattack(); }
+    processLevelUps();
+    saveState();
+    render();
+  }
+
+  function deleteQuest(id){
+    state.quests = (state.quests||[]).filter(q=>q.id!==id);
+    saveState();
+    renderQuests();
+  }
+
+  function renderQuests(){
+    const listEl = document.getElementById('questList');
+    if(!listEl) return;
+    const quests = state.quests || [];
+    if(quests.length === 0){
+      listEl.innerHTML = '<div class="empty">デイリー・ウィークリークエストを追加しよう。</div>';
+      return;
+    }
+    listEl.innerHTML = '';
+    const DAY = 24*60*60*1000;
+    quests.forEach(q=>{
+      const periodMs = q.type==='weekly' ? 7*DAY : DAY;
+      const remaining = Math.max(0, (q.periodStart + periodMs) - Date.now());
+      const hoursTotal = Math.floor(remaining/(60*60*1000));
+      const days = Math.floor(hoursTotal/24);
+      const remainText = q.type==='weekly' ? `あと${days}日${hoursTotal%24}時間` : `あと${hoursTotal}時間`;
+      const div = document.createElement('div');
+      div.className = 'task' + (q.completed ? ' done' : '');
+      div.innerHTML = `
+        <div class="task-top">
+          <div>
+            <div class="task-name ${q.completed?'strike':''}">${escapeHtml(q.name)}</div>
+            <div class="task-meta">
+              <span class="genre-badge" style="background:${q.type==='weekly'?'var(--arcane-dim)':'var(--good)'};">🗓️${q.type==='weekly'?'毎週':'毎日'}</span>
+              <span>${remainText}</span>
+            </div>
+          </div>
+        </div>
+        <div class="task-controls">
+          ${!q.completed ? `<button data-qaction="complete" data-id="${q.id}">達成</button>` : `<span style="font-size:12px; color:var(--ink-dim);">達成済</span>`}
+          <button class="danger" data-qaction="delete" data-id="${q.id}">削除</button>
+        </div>
+      `;
+      listEl.appendChild(div);
+    });
+  }
+
+  function showSaveError(){ document.getElementById('saveError').style.display = 'block'; }
+  function hideSaveError(){ document.getElementById('saveError').style.display = 'none'; }
+
+  async function saveState(retrying){
+    state.updatedAt = Date.now();
+    const ok = await storageSet(STORE_KEY, JSON.stringify(state));
+    if(state.syncCode){ pushStateToCloud(); /* 失敗しても静かに無視。ローカル保存は既に成功している */ }
+    if(ok){
+      hideSaveError();
+      return true;
+    }
+    showSaveError();
+    if(!retrying){
+      setTimeout(()=>{ saveState(true); }, 2500);
+    }
+    return false;
+  }
+
+  // 他のタブ・端末で進んでいた場合、フォーカスが戻った時に新しい方を取り込む
+  window.addEventListener('focus', async ()=>{
+    try{
+      const res = await storageGet(STORE_KEY);
+      if(res && res.value){
+        const remote = JSON.parse(res.value);
+        if(remote.updatedAt && remote.updatedAt > (state.updatedAt||0)){
+          state = remote;
+          if(!state.inventory) state.inventory = {hpPotion:0, mpPotion:0};
+          addLog('別のタブ・端末での進行を読み込んだ。');
+          render();
+        }
+      }
+    }catch(e){ /* silent */ }
+  });
+
+  function addLog(html){
+    state.logs.unshift(html);
+    state.logs = state.logs.slice(0, 60);
+  }
+
+  function drawSigil(level){
+    const svg = document.getElementById('sigil');
+    const points = Math.min(4 + Math.floor(level/2), 12);
+    const cx=50, cy=50, rOuter=42, rInner=18 + Math.min(level,10);
+    let d = '';
+    for(let i=0;i<points*2;i++){
+      const r = i%2===0 ? rOuter : rInner;
+      const ang = (Math.PI/points)*i - Math.PI/2;
+      const x = cx + r*Math.cos(ang);
+      const y = cy + r*Math.sin(ang);
+      d += (i===0?'M':'L') + x.toFixed(1) + ',' + y.toFixed(1) + ' ';
+    }
+    d += 'Z';
+    const boss = !!state.activeBoss;
+    svg.innerHTML = `<path d="${d}" fill="none" stroke="var(--blood)" stroke-width="${boss?4:3}" stroke-linejoin="round"/>
+      <circle cx="50" cy="50" r="${Math.min(6+level*0.4,14)}" fill="var(--blood-dim)" stroke="var(--blood)" stroke-width="2"/>`;
+  }
+
+  function escapeHtml(s){
+    return s.replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+
+  // --- 遭遇の生成（通常の敵 or ボス）---
+  function spawnEncounter(announce){
+    const bh = bossesAtLevel(state.level);
+    if(bh.length && state.bossStage < bh.length){
+      const b = bh[state.bossStage];
+      state.activeBoss = {kind:b.kind, name:b.name, hpMul:b.hpMul, atkMul:b.atkMul};
+      if(announce){
+        const kindLabel = {mini:'小ボス', mid:'中ボス', major:'大ボス', final:'ラスボス', secret:'裏ボス'};
+        addLog(`<span class="boss">◆ ${kindLabel[b.kind]||'ボス'}出現：${b.name}</span>`);
+        addLog(b.story);
+      }
+    } else {
+      state.activeBoss = null;
+    }
+    state.enemyHpCurrent = currentEnemyMaxHp();
+  }
+
+  // --- 戦闘処理 ---
+
+  function damageEnemy(dmg, sourceLabel){
+    playAttackEmote(dmg);
+    sfxAttack();
+    state.enemyHpCurrent -= dmg;
+    addLog(`${sourceLabel}　敵に<span class="hit">${dmg}</span>のダメージ`);
+    if(state.enemyHpCurrent > 0) return false;
+
+    const wasBoss = !!state.activeBoss;
+    const defeatedName = currentEnemyName();
+
+    if(wasBoss){
+      const kind = state.activeBoss.kind;
+      const kindMul = {mini:1, mid:1.8, major:3, final:4.5, secret:7}[kind] || 1;
+      const bonusGold = Math.round(50 * kindMul * state.loopGrowth * diff().rewardMul);
+      const bonusXp = Math.round(40 * kindMul * state.loopGrowth * diff().rewardMul);
+      state.gold += bonusGold;
+      state.xp += bonusXp;
+      state.totalGoldEarned = (state.totalGoldEarned||0) + bonusGold;
+      state.totalXpEarned = (state.totalXpEarned||0) + bonusXp;
+      state.bossesDefeated = (state.bossesDefeated||0) + 1;
+      addLog(`<span class="boss">◆ ${defeatedName} を打ち倒した！</span> 討伐報酬 +${bonusXp}XP <span class="g">+${bonusGold}G</span>`);
+      state.inventory.hpPotion++;
+      sfxBossDefeat();
+
+      if(kind === 'secret'){
+        triggerLoop();
+        return true;
+      }
+      state.bossStage++;
+      spawnEncounter(true);
+    } else {
+      sfxDefeatEnemy();
+      const dropRoll = Math.random();
+      let drop = null;
+      if(dropRoll < 0.35){ drop='hpPotion'; }
+      else if(dropRoll < 0.55){ drop='mpPotion'; }
+      if(drop){
+        state.inventory[drop]++;
+        addLog(`<span class="win">${defeatedName} を打ち倒した！</span> 戦利品：${drop==='hpPotion'?'体力ポーション':'魔力ポーション'}を手に入れた`);
+      } else {
+        addLog(`<span class="win">${defeatedName} を打ち倒した！</span>`);
+      }
+      spawnEncounter(false);
+    }
+    return true;
+  }
+
+  function enemyCounterattack(){
+    const eAtk = currentEnemyAtk();
+    const dmgToPlayer = Math.max(1, eAtk - state.def);
+    playCounterEmote(dmgToPlayer);
+    sfxCounter();
+    state.hp -= dmgToPlayer;
+    addLog(`${currentEnemyName()} の反撃！ <span class="hit">${dmgToPlayer}</span> のダメージを受けた`);
+    if(state.hp <= 0){
+      handlePlayerDefeat();
+    }
+  }
+
+  function handlePlayerDefeat(){
+    sfxFall();
+    state.comboCount = 0;
+    if(state.activeBoss){
+      addLog(`<span class="fall">${pname()} は ${currentEnemyName()} に退けられた…</span>`);
+      const lost = Math.round(state.gold*0.1);
+      state.gold -= lost;
+      state.hp = Math.round(state.maxHp*0.5);
+      state.enemyHpCurrent = currentEnemyMaxHp();
+      addLog(`積み上げた勢いを失ったが、道はまだ繋がっている。${lost>0?lost+'Gを落とした。':''}もう一度、挑み直せる。`);
+    } else {
+      addLog(`<span class="fall">${pname()} はたおれた…目の前が暗くなる…</span>`);
+      const lost = Math.round(state.gold*0.2);
+      state.gold -= lost;
+      state.hp = Math.round(state.maxHp*0.5);
+      state.enemyHpCurrent = currentEnemyMaxHp();
+      addLog(`気づくと少し手前にいた。${lost}Gを落とし、敵は体勢を立て直していた。`);
+    }
+  }
+
+  // 退く：敵に与えたダメージ（進捗）は保持したまま、安全な場所でHPだけ最低限回復する
+  function fleeEncounter(){
+    const before = state.hp;
+    state.hp = Math.max(state.hp, Math.round(state.maxHp*0.4));
+    if(state.hp > before){
+      addLog(`${pname()} は ${currentEnemyName()} から退き、傷を癒やした。与えたダメージは残っている。`);
+    } else {
+      addLog(`${pname()} は一度、${currentEnemyName()} から距離を取った。`);
+    }
+    saveState();
+    render();
+  }
+
+  function triggerLoop(){
+    state.loopCount = (state.loopCount||0) + 1;
+    state.loopGrowth = 1 + state.loopCount*0.15;
+    addLog(`<span class="lv">◆ 世界が巻き戻る。第${state.loopCount+1}周へ——${pname()}は、より強くなってこの地に還る。</span>`);
+    addLog('倒れることのない敵、終わることのない道。それでも、前よりも遠くまで行けるはずだ。');
+
+    state.level = 1;
+    state.xp = 0;
+    state.bossStage = 0;
+    state.maxHp = Math.round(30*state.loopGrowth);
+    state.maxMp = Math.round(20*state.loopGrowth);
+    state.atk = Math.round(5*state.loopGrowth);
+    state.def = Math.round(2*state.loopGrowth);
+
+    const jobObj = JOBS.find(j=>j.id===state.job);
+    if(jobObj){
+      if(jobObj.atkMul) state.atk = Math.round(state.atk*jobObj.atkMul);
+      if(jobObj.hpMul) state.maxHp = Math.round(state.maxHp*jobObj.hpMul);
+      if(jobObj.mpMul) state.maxMp = Math.round(state.maxMp*jobObj.mpMul);
+      if(jobObj.defMul) state.def = Math.round(state.def*jobObj.defMul);
+    }
+    state.hp = state.maxHp;
+    state.mp = state.maxMp;
+    spawnEncounter(true);
+  }
+
+  function processLevelUps(){
+    const areaBeforeName = getArea(state.level).name;
+    let leveledUp = false;
+    while(state.xp >= xpToNext(state.level) && !hasPendingBoss()){
+      state.xp -= xpToNext(state.level);
+      state.level++;
+      state.bossStage = 0;
+      state.maxHp += Math.round(10*state.loopGrowth);
+      state.hp = state.maxHp;
+      state.atk += Math.round(2*state.loopGrowth);
+      state.def += Math.round(1*state.loopGrowth);
+      state.maxMp = maxMpForLevel(state.level);
+      state.mp = state.maxMp;
+      leveledUp = true;
+      addLog(`<span class="lv">レベルアップ！ ${pname()} はLv.${state.level}になった。攻撃力・防御力・体力が上昇。</span>`);
+      const newSkill = SKILLS.find(s=>s.reqLevel === state.level);
+      if(newSkill){
+        addLog(`<span class="lv">新しい術「${newSkill.icon} ${newSkill.name}」を習得した！</span>`);
+      }
+      if(state.level % 5 === 0){
+        addLog(MILESTONES[((state.level/5)-1) % MILESTONES.length]);
+      }
+    }
+    if(!state.job && !state.pendingJobChoice && state.level >= JOB_UNLOCK_LEVEL){
+      state.pendingJobChoice = true;
+      addLog(`<span class="lv">${pname()} は岐路に立った。生き方を選ぶ時が来た。</span>`);
+    }
+    const areaAfterObj = getArea(state.level);
+    const areaChanged = areaAfterObj.name !== areaBeforeName;
+    if(areaChanged){
+      addLog(`<span class="area">${pname()} は ${areaAfterObj.name} へ足を踏み入れた。</span>`);
+      addLog(areaAfterObj.story);
+    }
+    if(leveledUp){
+      sfxLevelUp();
+      spawnEncounter(true);
+    }
+  }
+
+  function render(){
+    applyAreaTheme(state.level);
+    updateFighterSprites();
+    document.getElementById('soundToggleBtn').textContent = state.soundOn ? '🔊' : '🔇';
+    const need = xpToNext(state.level);
+    document.getElementById('lvBadge').textContent = 'Lv.' + state.level;
+    const loopBadge = document.getElementById('loopBadge');
+    if(state.loopCount > 0){
+      loopBadge.style.display = 'inline';
+      loopBadge.textContent = '周回 ' + (state.loopCount+1);
+    } else {
+      loopBadge.style.display = 'none';
+    }
+    document.getElementById('xpText').textContent = state.xp + ' / ' + need;
+    document.getElementById('xpBar').style.width = Math.min(100, state.xp/need*100) + '%';
+    document.getElementById('hpText').textContent = Math.max(0,state.hp) + ' / ' + state.maxHp;
+    document.getElementById('hpBar').style.width = Math.max(0,state.hp/state.maxHp*100) + '%';
+    document.getElementById('mpText').textContent = state.mp + ' / ' + state.maxMp;
+    document.getElementById('mpBar').style.width = (state.mp/state.maxMp*100) + '%';
+    document.getElementById('atkStat').textContent = state.atk;
+    document.getElementById('defStat').textContent = state.def;
+    const jobObj = JOBS.find(j=>j.id===state.job);
+    document.getElementById('jobStat').textContent = jobObj ? jobObj.icon+' '+jobObj.name : '未定';
+    const rate = state.tasksCompleted ? Math.round(state.onTimeCompleted/state.tasksCompleted*100) : 0;
+    document.getElementById('rateStat').textContent = state.tasksCompleted ? rate+'%' : '—';
+    document.getElementById('comboStat').textContent = state.comboCount > 0 ? state.comboCount : '-';
+    document.getElementById('doneStat').textContent = state.tasksCompleted;
+    document.getElementById('bossCountStat').textContent = state.bossesDefeated || 0;
+    document.getElementById('loopStat').textContent = (state.loopCount||0) + 1;
+    document.getElementById('goldDisplay').textContent = '💰 ' + state.gold;
+
+    const fleeBtn = document.getElementById('fleeBtn');
+    const safeHp = Math.round(state.maxHp*0.4);
+    if(state.hp >= safeHp){
+      fleeBtn.disabled = true;
+      fleeBtn.textContent = '🏃 退く（今は十分に元気）';
+    } else {
+      fleeBtn.disabled = false;
+      fleeBtn.textContent = '🏃 退く（安全な場所へ）';
+    }
+
+    if(document.activeElement.id !== 'nameInput'){
+      document.getElementById('nameInput').value = state.name || '';
+    }
+
+    document.getElementById('areaName').textContent = getArea(state.level).name;
+    document.getElementById('areaDesc').textContent = getArea(state.level).desc;
+    document.getElementById('enemyName').textContent = currentEnemyName();
+    document.getElementById('enemyAtkLabel').textContent = 'ATK ' + currentEnemyAtk();
+    const emax = currentEnemyMaxHp();
+    document.getElementById('enemyHpText').textContent = Math.max(0,state.enemyHpCurrent) + ' / ' + emax;
+    document.getElementById('enemyHpBar').style.width = Math.max(0, state.enemyHpCurrent/emax*100) + '%';
+    const bossBadge = document.getElementById('bossBadge');
+    if(state.activeBoss){
+      bossBadge.style.display = 'inline';
+      const kindLabel = {mini:'小ボス', mid:'中ボス', major:'大ボス', final:'ラスボス', secret:'裏ボス'};
+      bossBadge.textContent = kindLabel[state.activeBoss.kind] || 'BOSS';
+    } else {
+      bossBadge.style.display = 'none';
+    }
+    drawSigil(state.level);
+
+    document.getElementById('hudLevel').textContent = state.level;
+    document.getElementById('hudHpBar').style.width = Math.max(0,state.hp/state.maxHp*100) + '%';
+    document.getElementById('hudMpBar').style.width = (state.mp/state.maxMp*100) + '%';
+    document.getElementById('hudEnemyName').textContent = currentEnemyName() + (state.activeBoss ? ' ('+({mini:'小',mid:'中',major:'大',final:'ラス',secret:'裏'}[state.activeBoss.kind]||'')+')' : '');
+    document.getElementById('hudEnemyHpBar').style.width = Math.max(0, state.enemyHpCurrent/emax*100) + '%';
+
+    document.getElementById('log').innerHTML = state.logs.map(l=>'<div>'+l+'</div>').join('') || '<div>まだ何も起きていない。</div>';
+
+    document.getElementById('jobChoiceSection').style.display = state.pendingJobChoice ? 'block' : 'none';
+    if(state.pendingJobChoice) renderJobChoice();
+
+    renderSkills();
+    renderShop();
+    renderDifficulty();
+    renderTasks();
+  }
+
+  function renderDifficulty(){
+    const grid = document.getElementById('difficultyGrid');
+    grid.innerHTML = Object.keys(DIFFICULTY).map(key=>{
+      const d = DIFFICULTY[key];
+      const active = (state.difficulty||'normal') === key;
+      return `
+        <div class="skill-card ${active?'job-card':''}">
+          <div class="skill-top">
+            <span class="skill-name">${d.label}</span>
+            ${active ? '<span class="skill-cost">選択中</span>' : ''}
+          </div>
+          <div class="skill-desc">${d.desc}</div>
+          ${active ? '' : `<button class="secondary" data-difficulty="${key}">これにする</button>`}
+        </div>`;
+    }).join('');
+  }
+
+  function renderJobChoice(){
+    const grid = document.getElementById('jobGrid');
+    grid.innerHTML = JOBS.map(j=>`
+      <div class="skill-card job-card">
+        <div class="skill-top">
+          <span class="skill-name"><span class="skill-icon">${j.icon}</span>${j.name}</span>
+        </div>
+        <div class="skill-desc">${j.tagline}<br>${j.desc}</div>
+        <button data-job="${j.id}">この道を選ぶ</button>
+      </div>`).join('');
+  }
+
+  function renderSkills(){
+    const grid = document.getElementById('skillsGrid');
+    grid.innerHTML = SKILLS.map(s=>{
+      const unlocked = state.level >= s.reqLevel;
+      const canAfford = state.mp >= s.mpCost;
+      const disabled = !unlocked || !canAfford;
+      return `
+        <div class="skill-card ${unlocked?'':'locked'}">
+          <div class="skill-top">
+            <span class="skill-name"><span class="skill-icon">${s.icon}</span>${s.name}</span>
+          </div>
+          <div class="skill-desc">${unlocked ? s.desc : 'Lv.'+s.reqLevel+' で習得'}</div>
+          ${unlocked ? `
+          <div class="skill-cost">MP ${s.mpCost}</div>
+          <button class="magic" style="margin-top:8px" data-skill="${s.id}" ${disabled?'disabled':''}>
+            ${canAfford ? '使う' : 'MP不足'}
+          </button>` : ''}
+        </div>`;
+    }).join('');
+  }
+
+  function renderShop(){
+    const grid = document.getElementById('shopGrid');
+    const items = [
+      {key:'hpPotion', name:'体力ポーション', icon:'🧪', cost:30, heal:25, mp:false},
+      {key:'mpPotion', name:'魔力ポーション', icon:'🔷', cost:25, heal:20, mp:true}
+    ];
+    let html = items.map(it=>{
+      const count = state.inventory[it.key] || 0;
+      return `
+        <div class="item-card">
+          <div class="skill-top">
+            <span class="skill-name">${it.icon} ${it.name}</span>
+            <span class="skill-cost">所持 ${count}</span>
+          </div>
+          <div class="skill-desc">${it.mp?'MP':'HP'}を${it.heal}回復</div>
+          <div style="display:flex; gap:8px;">
+            <button class="secondary" data-buy="${it.key}" data-cost="${it.cost}">購入 (${it.cost}G)</button>
+            <button class="magic" data-use="${it.key}" ${count>0?'':'disabled'}>使う</button>
+          </div>
+        </div>`;
+    }).join('');
+
+    const respecCost = Math.round(200 * state.loopGrowth);
+    const canRespec = state.job && state.level >= JOB_RESPEC_LEVEL;
+    const canAfford = state.gold >= respecCost;
+    html += `
+      <div class="item-card job-card">
+        <div class="skill-top">
+          <span class="skill-name">📜 転職の書</span>
+        </div>
+        <div class="skill-desc">${canRespec ? 'これまでの生き方を捨て、ジョブを選び直す' : `Lv.${JOB_RESPEC_LEVEL}・ジョブ選択済みで解禁`}</div>
+        <button class="magic" id="respecBtn" ${(!canRespec||!canAfford)?'disabled':''}>
+          ${canRespec ? (canAfford ? `転職する (${respecCost}G)` : `転職する (${respecCost}G・ゴールド不足)`) : '未解禁'}
+        </button>
+      </div>`;
+    grid.innerHTML = html;
+    const respecBtn = document.getElementById('respecBtn');
+    if(respecBtn){
+      respecBtn.addEventListener('click', ()=>{
+        if(!canRespec || state.gold < respecCost) return;
+        state.gold -= respecCost;
+        respecJob();
+      });
+    }
+  }
+
+  function respecJob(){
+    const bonus = state.jobStatBonus || {atk:0,maxHp:0,maxMp:0,def:0};
+    state.atk = Math.max(1, state.atk - bonus.atk);
+    state.maxHp = Math.max(10, state.maxHp - bonus.maxHp);
+    state.hp = Math.min(state.hp, state.maxHp);
+    state.maxMp = Math.max(0, state.maxMp - bonus.maxMp);
+    state.mp = Math.min(state.mp, state.maxMp);
+    state.def = Math.max(0, state.def - bonus.def);
+    state.jobStatBonus = {atk:0, maxHp:0, maxMp:0, def:0};
+    state.job = null;
+    state.jobOnTimeMul = 1; state.jobGoldMul = 1; state.jobSkillMul = 1; state.jobHealMul = 1;
+    state.pendingJobChoice = true;
+    addLog(`<span class="lv">転職の書を使い、${pname()}はこれまでの生き方を捨てた。新たな道を選び直せる。</span>`);
+    saveState();
+    render();
+  }
+
+  function isOverdue(dateStr){
+    if(!dateStr) return false;
+    const today = new Date();
+    today.setHours(0,0,0,0);
+    const d = new Date(dateStr+'T00:00:00');
+    return d < today;
+  }
+
+  function refreshGenreOptions(){
+    const distinct = Array.from(new Set(state.tasks.map(t=>t.genre).filter(g=>g)));
+    const all = Array.from(new Set([...DEFAULT_GENRES, ...distinct]));
+    const datalist = document.getElementById('genreList');
+    datalist.innerHTML = all.map(g=>`<option value="${escapeHtml(g)}"></option>`).join('');
+    const filterEl = document.getElementById('genreFilter');
+    const prevVal = filterEl.value;
+    filterEl.innerHTML = '<option value="">すべて</option>' + distinct.map(g=>`<option value="${escapeHtml(g)}">${escapeHtml(g)}</option>`).join('');
+    filterEl.value = distinct.includes(prevVal) ? prevVal : '';
+    filterGenre = filterEl.value;
+  }
+
+  function renderTasks(){
+    refreshGenreOptions();
+    const listEl = document.getElementById('taskList');
+    const visible = state.tasks.filter(t=> !filterGenre || t.genre === filterGenre);
+    if(visible.length === 0){
+      listEl.innerHTML = `<div class="empty">${state.tasks.length===0 ? 'タスクを追加して遠征を始めよう。' : 'このジャンルのタスクはまだない。'}</div>`;
+      return;
+    }
+    listEl.innerHTML = '';
+    visible.forEach(t=>{
+      const div = document.createElement('div');
+      div.className = 'task' + (t.completed ? ' done' : '');
+
+      if(pendingEditId === t.id){
+        const elapsedMinNow = (t.elapsedSeconds/60);
+        div.innerHTML = `
+          <div class="task-top" style="width:100%; flex-direction:column; gap:8px;">
+            <input type="text" data-edit="name" value="${escapeHtml(t.name)}" style="width:100%;">
+            <div style="display:flex; gap:8px; flex-wrap:wrap; width:100%;">
+              <input type="number" data-edit="est" placeholder="想定分" min="0" value="${t.estimateMinutes!=null?t.estimateMinutes:''}" style="width:110px;">
+              <input type="number" data-edit="elapsed" placeholder="経過分" min="0" step="0.1" value="${elapsedMinNow?Math.round(elapsedMinNow*10)/10:0}" style="width:110px;">
+              <input type="date" data-edit="date" value="${t.dueDate||''}">
+              <input type="text" data-edit="genre" placeholder="ジャンル(任意)" value="${escapeHtml(t.genre||'')}" list="genreList">
+              <label style="display:flex; align-items:center; gap:5px; font-size:12.5px; color:var(--ink-dim);">
+                <input type="checkbox" data-edit="strict" ${t.strictMode!==false?'checked':''} style="width:auto; padding:0;">工数遵守
+              </label>
+              <select data-edit="recurrence" style="width:auto;">
+                <option value="" ${!t.recurrence?'selected':''}>繰り返しなし</option>
+                <option value="daily" ${t.recurrence==='daily'?'selected':''}>🔁毎日</option>
+                <option value="weekly" ${t.recurrence==='weekly'?'selected':''}>🔁毎週</option>
+              </select>
+            </div>
+            <div class="bulk-hint">経過分は計測時間を手動で上書きできます（ストップウォッチは一時停止した状態になります）</div>
+            <div style="display:flex; gap:8px;">
+              <button data-action="save-edit" data-id="${t.id}" style="width:auto;">保存</button>
+              <button class="secondary" data-action="cancel-edit" style="width:auto;">キャンセル</button>
+            </div>
+          </div>`;
+        listEl.appendChild(div);
+        return;
+      }
+
+      const hasEst = t.estimateMinutes != null && t.estimateMinutes > 0;
+      const estSec = hasEst ? t.estimateMinutes*60 : null;
+      const elapsed = t.elapsedSeconds + (t.running ? (Date.now()-t.startedAt)/1000 : 0);
+      let timerClass = '';
+      if(hasEst && !t.completed){
+        timerClass = elapsed > estSec ? 'over' : 'under';
+      }
+      const overdue = !t.completed && isOverdue(t.dueDate);
+      const metaParts = [];
+      metaParts.push(`<span>${hasEst ? '想定 '+t.estimateMinutes+'分' : '想定時間なし'}</span>`);
+      if(hasEst){
+        metaParts.push(`<span class="genre-badge" style="background:${t.strictMode!==false?'var(--blood-dim)':'var(--arcane-dim)'}">${t.strictMode!==false?'工数遵守':'じっくり型'}</span>`);
+      }
+      if(t.dueDate){
+        const todayCheck = new Date(); todayCheck.setHours(0,0,0,0);
+        const dueCheck = new Date(t.dueDate+'T00:00:00');
+        const eligible = !t.completed && todayCheck <= dueCheck;
+        metaParts.push(`<span class="${overdue?'overdue':''}">期日 ${t.dueDate}${overdue?'（期限超過）':(eligible?'（期日内ボーナス対象）':'')}</span>`);
+      }
+      if(t.genre){
+        metaParts.push(`<span class="genre-badge" style="background:${genreColor(t.genre)};">${escapeHtml(t.genre)}</span>`);
+      }
+      if(t.recurrence){
+        metaParts.push(`<span class="genre-badge" style="background:var(--good);">🔁${t.recurrence==='daily'?'毎日':'毎週'}</span>`);
+      }
+      div.innerHTML = `
+        <div class="task-top">
+          <div>
+            <div class="task-name ${t.completed?'strike':''}">${escapeHtml(t.name)}</div>
+            <div class="task-meta">${metaParts.join('')}</div>
+          </div>
+          ${t.completed ? `<button class="secondary" data-action="restore" data-id="${t.id}" style="width:auto; font-size:12px;">復元</button>` : ''}
+        </div>
+        ${!t.completed ? (
+          pendingDeleteId === t.id ? `
+          <div class="task-controls">
+            <span style="color:var(--blood); font-size:13px;">本当に削除する？</span>
+            <button class="danger" data-action="confirm-delete" data-id="${t.id}">削除する</button>
+            <button class="secondary" data-action="cancel-delete">キャンセル</button>
+          </div>` : (
+          pendingFailId === t.id ? `
+          <div class="task-controls">
+            <span style="color:var(--blood); font-size:13px;">本当に未達成にする？（ダメージを受ける）</span>
+            <button class="danger" data-action="confirm-fail" data-id="${t.id}">未達成にする</button>
+            <button class="secondary" data-action="cancel-fail">キャンセル</button>
+          </div>` : `
+          <div class="task-controls">
+            <span class="timer ${timerClass}" data-timer="${t.id}">${fmtTime(elapsed)}</span>
+            <button class="secondary" data-action="toggle" data-id="${t.id}">${t.running ? '一時停止' : (t.elapsedSeconds>0?'再開':'開始')}</button>
+            <button data-action="complete" data-id="${t.id}">討伐完了</button>
+            <button class="secondary" data-action="edit" data-id="${t.id}">編集</button>
+            <button class="secondary" data-action="fail" data-id="${t.id}" style="color:var(--blood);">未達成</button>
+            <button class="danger" data-action="delete" data-id="${t.id}">削除</button>
+          </div>`
+          )
+        ) : ''}
+      `;
+      listEl.appendChild(div);
+    });
+  }
+
+  function tickTimers(){
+    state.tasks.forEach(t=>{
+      if(t.running){
+        const elapsed = t.elapsedSeconds + (Date.now()-t.startedAt)/1000;
+        const el = document.querySelector(`[data-timer="${t.id}"]`);
+        if(el){
+          el.textContent = fmtTime(elapsed);
+          if(t.estimateMinutes){
+            el.className = 'timer ' + (elapsed > t.estimateMinutes*60 ? 'over':'under');
+          }
+        }
+      }
+    });
+    if(guildState && guildState.tasks){
+      guildState.tasks.forEach(t=>{
+        if(t.running){
+          const elapsed = t.elapsedSeconds + (Date.now()-t.startedAt)/1000;
+          const el = document.querySelector(`[data-gtimer="${t.id}"]`);
+          if(el) el.textContent = fmtTime(elapsed);
+        }
+      });
+    }
+  }
+
+  function toggleTask(id){
+    const t = state.tasks.find(t=>t.id===id);
+    if(!t) return;
+    if(t.running){
+      t.elapsedSeconds += (Date.now()-t.startedAt)/1000;
+      t.running = false;
+    } else {
+      t.startedAt = Date.now();
+      t.running = true;
+    }
+    saveState();
+    renderTasks();
+  }
+
+  function completeTask(id){
+    const t = state.tasks.find(t=>t.id===id);
+    if(!t) return;
+    if(t.running){
+      t.elapsedSeconds += (Date.now()-t.startedAt)/1000;
+      t.running = false;
+    }
+    const hasEst = t.estimateMinutes != null && t.estimateMinutes > 0;
+    let multiplier = 1.0;
+    let tag = '';
+    const prevCombo = state.comboCount;
+    if(hasEst){
+      const estSec = t.estimateMinutes*60;
+      const ratio = t.elapsedSeconds / estSec;
+      const strict = t.strictMode !== false;
+      if(strict){
+        if(ratio <= 1){
+          multiplier = 1.5 * state.jobOnTimeMul;
+          tag = '<span class="win">［予定内・会心の一撃］</span>';
+          state.onTimeCompleted++;
+          state.comboCount++;
+        } else {
+          const overPct = Math.round((ratio-1)*100);
+          multiplier = Math.max(0.2, 0.7 - 0.4*(ratio-1));
+          tag = `<span style="color:var(--blood)">［予定${overPct}%超過・威力×${multiplier.toFixed(2)}］</span>`;
+          state.comboCount = 0;
+        }
+      } else {
+        if(ratio <= 1){
+          multiplier = 1.0;
+          tag = '<span>［じっくり型・通常討伐］</span>';
+        } else {
+          const overPct = Math.round((ratio-1)*100);
+          multiplier = Math.min(2.0, 1.0 + 0.3*(ratio-1));
+          tag = `<span class="win">［+${overPct}%の時間をかけた・威力×${multiplier.toFixed(2)}］</span>`;
+        }
+        state.comboCount++;
+      }
+    }
+    const comboMul = 1 + Math.min(state.comboCount,10)*0.05;
+
+    let dateBonus = 1.0;
+    let dateTag = '';
+    if(t.dueDate){
+      const today = new Date(); today.setHours(0,0,0,0);
+      const due = new Date(t.dueDate+'T00:00:00');
+      if(today <= due){
+        dateBonus = 1.2;
+        dateTag = '<span class="win">［期日内ボーナス］</span>';
+      }
+    }
+
+    const baseXp = Math.max(5, Math.min(240, hasEst ? t.estimateMinutes : 15)) * 0.8;
+    const xpGain = Math.round(baseXp * multiplier * dateBonus * diff().rewardMul);
+    const dmg = Math.round(state.atk * multiplier * comboMul * dateBonus);
+    const goldGain = Math.round(xpGain/2 * state.jobGoldMul * comboMul);
+
+    t.completed = true;
+    t.completedAt = Date.now();
+    state.tasksCompleted++;
+    state.xp += xpGain;
+    state.gold += goldGain;
+    state.totalXpEarned = (state.totalXpEarned||0) + xpGain;
+    state.totalGoldEarned = (state.totalGoldEarned||0) + goldGain;
+    state.mp = Math.min(state.maxMp, state.mp + 4);
+
+    addLog(`「${escapeHtml(t.name)}」討伐完了 ${tag}${dateTag} +${xpGain}XP <span class="g">+${goldGain}G</span>`);
+    if(state.comboCount >= 2){
+      addLog(`<span class="lv">🔥コンボ ${state.comboCount}！ ダメージ・報酬 +${Math.round((comboMul-1)*100)}%</span>`);
+    } else if(prevCombo >= 2 && state.comboCount === 0){
+      addLog('コンボが途切れた…積み上げた勢いは、また一からだ。');
+    }
+
+    const defeated = damageEnemy(dmg, '一撃を放った。');
+    if(!defeated){
+      enemyCounterattack();
+    }
+    processLevelUps();
+
+    saveState();
+    render();
+  }
+
+  function deleteTask(id){
+    state.tasks = state.tasks.filter(t=>t.id!==id);
+    pendingDeleteId = null;
+    saveState();
+    renderTasks();
+  }
+
+  function failTask(id){
+    const t = state.tasks.find(t=>t.id===id);
+    if(!t) return;
+    const dmg = Math.max(3, Math.round(state.maxHp*0.08));
+    state.hp = Math.max(0, state.hp - dmg);
+    state.comboCount = 0;
+    playCounterEmote(dmg);
+    sfxCounter();
+    addLog(`<span class="fall">「${escapeHtml(t.name)}」を未達成にした。${dmg}のダメージを受けた。</span>`);
+    state.tasks = state.tasks.filter(x=>x.id!==id);
+    pendingFailId = null;
+    if(state.hp <= 0){ handlePlayerDefeat(); }
+    saveState();
+    render();
+  }
+
+  function restoreTask(id){
+    const t = state.tasks.find(t=>t.id===id);
+    if(!t) return;
+    t.completed = false;
+    addLog(`「${escapeHtml(t.name)}」を復元した。（すでに得た報酬は変わらない）`);
+    saveState();
+    renderTasks();
+  }
+
+  function saveTaskEdit(id){
+    const t = state.tasks.find(t=>t.id===id);
+    if(!t) return;
+    const row = document.querySelector(`[data-action="save-edit"][data-id="${id}"]`).closest('.task');
+    const name = row.querySelector('[data-edit="name"]').value.trim();
+    const est = row.querySelector('[data-edit="est"]').value;
+    const elapsedMin = row.querySelector('[data-edit="elapsed"]').value;
+    const date = row.querySelector('[data-edit="date"]').value;
+    const genre = row.querySelector('[data-edit="genre"]').value.trim();
+    const strictChecked = row.querySelector('[data-edit="strict"]').checked;
+    const recurrenceVal = row.querySelector('[data-edit="recurrence"]').value;
+    if(name){ t.name = name; }
+    t.estimateMinutes = est ? parseInt(est,10) : null;
+    t.elapsedSeconds = elapsedMin ? Math.max(0, parseFloat(elapsedMin)*60) : 0;
+    t.running = false;
+    t.startedAt = null;
+    t.strictMode = strictChecked;
+    t.recurrence = recurrenceVal || null;
+    t.dueDate = date || null;
+    t.genre = genre || '';
+    pendingEditId = null;
+    saveState();
+    renderTasks();
+  }
+
+  function addTask(name, est, dueDate, genre, strictMode, recurrence){
+    state.tasks.unshift({
+      id: 't'+Date.now()+Math.random().toString(36).slice(2,7),
+      name, estimateMinutes: est,
+      dueDate: dueDate || null, genre: genre || '',
+      strictMode: strictMode !== false,
+      recurrence: recurrence || null,
+      completedAt: null,
+      elapsedSeconds:0, running:false, startedAt:null, completed:false
+    });
+  }
+
+  function useSkill(skillId){
+    const s = SKILLS.find(s=>s.id===skillId);
+    if(!s) return;
+    if(state.level < s.reqLevel || state.mp < s.mpCost) return;
+    state.mp -= s.mpCost;
+    if(s.kind === 'heal'){
+      const base = skillId==='greaterheal' ? (state.maxHp - state.hp) : Math.round(state.maxHp*0.35);
+      const amount = Math.round(base * state.jobHealMul);
+      state.hp = Math.min(state.maxHp, state.hp + amount);
+      playHealEmote(amount);
+      sfxHeal();
+      addLog(`${s.icon} ${s.name} を唱えた。HPが${amount}回復した`);
+    } else {
+      const base = skillId==='meteor' ? state.atk*3 : state.atk*1.6;
+      const dmg = Math.round(base * state.jobSkillMul);
+      const defeated = damageEnemy(dmg, `${s.icon} ${s.name} を放った。`);
+      if(defeated){ processLevelUps(); }
+    }
+    saveState();
+    render();
+  }
+
+  function buyItem(key, cost){
+    if(state.gold < cost) return;
+    state.gold -= cost;
+    state.inventory[key] = (state.inventory[key]||0) + 1;
+    sfxClick();
+    addLog(`商店で ${key==='hpPotion'?'体力ポーション':'魔力ポーション'} を購入した（-${cost}G）`);
+    saveState();
+    render();
+  }
+
+  function useItem(key){
+    if(!state.inventory[key]) return;
+    state.inventory[key]--;
+    if(key === 'hpPotion'){
+      const amount = 25;
+      state.hp = Math.min(state.maxHp, state.hp + amount);
+      playHealEmote(amount, false);
+      sfxHeal();
+      addLog(`体力ポーションを使った。HPが${amount}回復した`);
+    } else {
+      const amount = 20;
+      state.mp = Math.min(state.maxMp, state.mp + amount);
+      playHealEmote(amount, true);
+      sfxHeal();
+      addLog(`魔力ポーションを使った。MPが${amount}回復した`);
+    }
+    saveState();
+    render();
+  }
+
+  // --- ギルド機能 ---
+
+  function guildCollection(){
+    if(!db) return null;
+    return db.collection('guilds');
+  }
+
+  function genGuildCode(){
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    let code = '';
+    for(let i=0;i<6;i++) code += chars[Math.floor(Math.random()*chars.length)];
+    return code;
+  }
+
+  // --- 個人データの端末間同期（ローカル保存はそのまま、クラウドにもバックアップ兼同期する） ---
+  function playersCollection(){
+    if(!db) return null;
+    return db.collection('players');
+  }
+
+  async function pushStateToCloud(){
+    if(!db || !state.syncCode) return false;
+    try{
+      await playersCollection().doc(state.syncCode).set({
+        data: JSON.stringify(state),
+        updatedAt: state.updatedAt || Date.now()
+      });
+      return true;
+    }catch(e){ return false; }
+  }
+
+  async function pullStateFromCloud(code){
+    if(!db) return null;
+    try{
+      const snap = await playersCollection().doc(code).get();
+      if(snap.exists) return snap.data();
+    }catch(e){ /* ignore */ }
+    return null;
+  }
+
+  let pendingLinkCode = null;
+
+  function renderSyncPanel(){
+    const body = document.getElementById('syncBody');
+    if(!body) return;
+    if(pendingLinkCode){
+      body.innerHTML = `
+        <p style="font-size:13px; color:var(--blood); line-height:1.7;">
+          コード「${escapeHtml(pendingLinkCode)}」のデータを読み込むと、<strong>この端末の今の進行は上書きされ、消えます。</strong><br>
+          よろしいですか？
+        </p>
+        <div style="display:flex; gap:8px; margin-top:10px;">
+          <button class="danger" data-sync-action="confirm-link" style="width:auto;">上書きして復元する</button>
+          <button class="secondary" data-sync-action="cancel-link" style="width:auto;">キャンセル</button>
+        </div>`;
+      return;
+    }
+    if(state.syncCode){
+      body.innerHTML = `
+        <p class="bulk-hint">この端末は同期コードと連携済み。他の端末で同じコードを入力すれば、続きから始められる。</p>
+        <div class="stat-grid" style="margin-top:10px;">
+          <div>同期コード<b style="font-family:var(--font-mono); font-size:16px;">${escapeHtml(state.syncCode)}</b></div>
+        </div>
+        <div style="display:flex; gap:8px; margin-top:14px;">
+          <button data-sync-action="sync-now" style="width:auto;">今すぐ同期</button>
+          <button class="secondary" data-sync-action="unlink" style="width:auto;">連携を解除</button>
+        </div>
+        <div id="syncStatus" class="bulk-hint" style="margin-top:8px;"></div>`;
+    } else {
+      body.innerHTML = `
+        <p class="bulk-hint">同期コードを発行すると、他の端末で同じコードを入力するだけで、この進行を引き継げる。</p>
+        <button data-sync-action="generate" style="margin-top:10px;">新しい同期コードを発行する</button>
+        <div class="bulk-hint" style="margin:14px 0 6px;">すでにコードを持っている場合：</div>
+        <div class="add-form">
+          <input type="text" id="syncCodeInput" placeholder="同期コード" style="text-transform:uppercase;">
+          <button data-sync-action="link" style="width:auto;">このコードで復元</button>
+        </div>
+        <div id="syncStatus" class="bulk-hint" style="margin-top:8px;"></div>`;
+    }
+  }
+
+  function showGuildJoinError(msg){
+    const el = document.getElementById('guildJoinError');
+    el.textContent = msg;
+    el.style.display = 'block';
+  }
+  function hideGuildJoinError(){
+    document.getElementById('guildJoinError').style.display = 'none';
+  }
+
+  function defaultGuildBoss(level){
+    return { name: 'ギルドの試練 Lv.'+level, level, hp: Math.round(50*Math.pow(level,1.2)), maxHp: Math.round(50*Math.pow(level,1.2)) };
+  }
+
+  async function createGuild(){
+    if(!db){ showGuildJoinError('Firebaseへの接続準備ができていない（SDKの読み込みに失敗している可能性）。ページを再読み込みしてみてほしい。'); return; }
+    const nameEl = document.getElementById('guildDisplayName');
+    const myName = nameEl.value.trim();
+    if(!myName){ showGuildJoinError('ギルド内での表示名を入れてほしい。'); return; }
+    hideGuildJoinError();
+    let code = genGuildCode();
+    const docRef = guildCollection().doc(code);
+    const guildName = 'ギルド・'+code;
+    try{
+      await docRef.set({
+        name: guildName,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+        boss: defaultGuildBoss(1),
+        tasks: [],
+        members: [{ name: myName, contribution: 0 }],
+        logs: [`<span class="lv">${escapeHtml(myName)} がギルドを設立した。</span>`]
+      });
+    }catch(e){
+      console.error('createGuild failed:', e);
+      showGuildJoinError('ギルドの作成に失敗した（' + (e && e.message ? e.message : '不明なエラー') + '）。Firestore Databaseがまだ作成されていない、またはセキュリティルールがブロックしている可能性がある。');
+      return;
+    }
+    state.guildCode = code;
+    state.guildDisplayName = myName;
+    saveState();
+    subscribeGuild(code);
+  }
+
+  async function joinGuild(){
+    if(!db){ showGuildJoinError('通信の準備ができていない。少し待ってから再試行してほしい。'); return; }
+    const codeEl = document.getElementById('guildCodeInput');
+    const nameEl = document.getElementById('guildDisplayName');
+    const code = codeEl.value.trim().toUpperCase();
+    const myName = nameEl.value.trim();
+    if(!code){ showGuildJoinError('ギルドコードを入れてほしい。'); return; }
+    if(!myName){ showGuildJoinError('ギルド内での表示名を入れてほしい。'); return; }
+    hideGuildJoinError();
+    const docRef = guildCollection().doc(code);
+    try{
+      await db.runTransaction(async tx=>{
+        const snap = await tx.get(docRef);
+        if(!snap.exists){ throw new Error('NOT_FOUND'); }
+        const data = snap.data();
+        const members = data.members || [];
+        if(!members.some(m=>m.name===myName)){
+          members.push({ name: myName, contribution: 0 });
+          tx.update(docRef, { members, updatedAt: Date.now() });
+        }
+      });
+    }catch(e){
+      showGuildJoinError('そのギルドコードは見つからなかった。確認してほしい。');
+      return;
+    }
+    state.guildCode = code;
+    state.guildDisplayName = myName;
+    saveState();
+    subscribeGuild(code);
+  }
+
+  function leaveGuild(){
+    if(guildUnsub){ guildUnsub(); guildUnsub = null; }
+    state.guildCode = null;
+    guildState = null;
+    saveState();
+    document.getElementById('guildMainSection').style.display = 'none';
+    document.getElementById('guildJoinSection').style.display = 'block';
+  }
+
+  function subscribeGuild(code){
+    if(!db) return;
+    if(guildUnsub){ guildUnsub(); guildUnsub = null; }
+    document.getElementById('guildJoinSection').style.display = 'none';
+    document.getElementById('guildMainSection').style.display = 'block';
+    document.getElementById('guildCodeLabel').textContent = code;
+    guildUnsub = guildCollection().doc(code).onSnapshot(snap=>{
+      if(!snap.exists){
+        addLog('ギルドが見つからなくなった。');
+        leaveGuild();
+        render();
+        return;
+      }
+      guildState = snap.data();
+      renderGuild();
+    }, err=>{
+      addLog('ギルドとの通信でエラーが起きた。時間をおいて再試行してほしい。');
+    });
+  }
+
+  function renderGuild(){
+    if(!guildState) return;
+    document.getElementById('guildNameLabel').textContent = guildState.name;
+    const boss = guildState.boss || defaultGuildBoss(1);
+    document.getElementById('guildBossName').textContent = boss.name;
+    document.getElementById('guildBossHpText').textContent = Math.max(0,boss.hp) + ' / ' + boss.maxHp;
+    document.getElementById('guildBossHpBar').style.width = Math.max(0, boss.hp/boss.maxHp*100) + '%';
+    const svg = document.getElementById('guildSigil');
+    const lv = boss.level || 1;
+    const points = Math.min(4 + Math.floor(lv/2), 12);
+    const cx=50, cy=50, rOuter=42, rInner=18 + Math.min(lv,10);
+    let d = '';
+    for(let i=0;i<points*2;i++){
+      const r = i%2===0 ? rOuter : rInner;
+      const ang = (Math.PI/points)*i - Math.PI/2;
+      d += (i===0?'M':'L') + (cx+r*Math.cos(ang)).toFixed(1) + ',' + (cy+r*Math.sin(ang)).toFixed(1) + ' ';
+    }
+    d += 'Z';
+    svg.innerHTML = `<path d="${d}" fill="none" stroke="var(--blood)" stroke-width="3" stroke-linejoin="round"/>`;
+
+    const members = guildState.members || [];
+    document.getElementById('guildMembers').innerHTML = members
+      .slice().sort((a,b)=>(b.contribution||0)-(a.contribution||0))
+      .map(m=>`
+        <div class="skill-card">
+          <div class="skill-top"><span class="skill-name">${escapeHtml(m.name)}</span></div>
+          <div class="skill-desc">貢献ダメージ：${m.contribution||0}</div>
+        </div>`).join('');
+
+    const assigneeSel = document.getElementById('guildAssigneeInput');
+    const prevVal = assigneeSel.value;
+    assigneeSel.innerHTML = '<option value="">担当者未定</option>' + members.map(m=>`<option value="${escapeHtml(m.name)}">${escapeHtml(m.name)}</option>`).join('');
+    assigneeSel.value = members.some(m=>m.name===prevVal) ? prevVal : '';
+
+    document.getElementById('guildLog').innerHTML = (guildState.logs||[]).slice(0,40).map(l=>'<div>'+l+'</div>').join('') || '<div>まだ何も起きていない。</div>';
+
+    renderGuildTasks();
+  }
+
+  function renderGuildTasks(){
+    const listEl = document.getElementById('guildTaskList');
+    const tasks = (guildState && guildState.tasks) || [];
+    if(tasks.length === 0){
+      listEl.innerHTML = '<div class="empty">ギルドタスクを追加しよう。</div>';
+      return;
+    }
+    listEl.innerHTML = '';
+    tasks.forEach(t=>{
+      const div = document.createElement('div');
+      div.className = 'task' + (t.completed ? ' done' : '');
+      const hasEst = t.estimateMinutes != null && t.estimateMinutes > 0;
+      const elapsed = t.elapsedSeconds + (t.running ? (Date.now()-t.startedAt)/1000 : 0);
+      const metaParts = [`<span>${hasEst ? '想定 '+t.estimateMinutes+'分' : '想定時間なし'}</span>`];
+      metaParts.push(`<span class="genre-badge">${t.assigneeName ? escapeHtml(t.assigneeName) : '未定'}</span>`);
+      div.innerHTML = `
+        <div class="task-top">
+          <div>
+            <div class="task-name ${t.completed?'strike':''}">${escapeHtml(t.name)}</div>
+            <div class="task-meta">${metaParts.join('')}</div>
+          </div>
+          ${t.completed ? `<span style="font-family:var(--font-mono);font-size:12px;color:var(--ink-dim)">討伐済（${escapeHtml(t.completedBy||'')}）</span>` : ''}
+        </div>
+        ${!t.completed ? (
+          pendingGuildTaskDeleteId === t.id ? `
+          <div class="task-controls">
+            <span style="color:var(--blood); font-size:13px;">本当に削除する？</span>
+            <button class="danger" data-gaction="confirm-delete" data-id="${t.id}">削除する</button>
+            <button class="secondary" data-gaction="cancel-delete">キャンセル</button>
+          </div>` : `
+          <div class="task-controls">
+            <span class="timer" data-gtimer="${t.id}">${fmtTime(elapsed)}</span>
+            <button class="secondary" data-gaction="toggle" data-id="${t.id}">${t.running ? '一時停止' : (t.elapsedSeconds>0?'再開':'開始')}</button>
+            <button data-gaction="complete" data-id="${t.id}">討伐完了</button>
+            <button class="danger" data-gaction="delete" data-id="${t.id}">削除</button>
+          </div>`
+        ) : ''}
+      `;
+      listEl.appendChild(div);
+    });
+  }
+
+  async function addGuildTask(){
+    if(!guildState || !state.guildCode) return;
+    const nameEl = document.getElementById('guildTaskInput');
+    const estEl = document.getElementById('guildEstInput');
+    const assigneeEl = document.getElementById('guildAssigneeInput');
+    const name = nameEl.value.trim();
+    if(!name) return;
+    const est = estEl.value ? parseInt(estEl.value,10) : null;
+    const task = {
+      id: 'g'+Date.now()+Math.random().toString(36).slice(2,7),
+      name, estimateMinutes: est, assigneeName: assigneeEl.value || '',
+      elapsedSeconds:0, running:false, startedAt:null, completed:false, completedBy:null
+    };
+    const docRef = guildCollection().doc(state.guildCode);
+    const tasks = (guildState.tasks||[]).concat([task]);
+    await docRef.update({ tasks, updatedAt: Date.now() });
+    nameEl.value=''; estEl.value='';
+  }
+
+  async function toggleGuildTask(id){
+    if(!guildState || !state.guildCode) return;
+    const tasks = (guildState.tasks||[]).map(t=>({...t}));
+    const t = tasks.find(t=>t.id===id);
+    if(!t) return;
+    if(t.running){ t.elapsedSeconds += (Date.now()-t.startedAt)/1000; t.running=false; }
+    else { t.startedAt = Date.now(); t.running = true; }
+    await guildCollection().doc(state.guildCode).update({ tasks, updatedAt: Date.now() });
+  }
+
+  async function deleteGuildTask(id){
+    if(!guildState || !state.guildCode) return;
+    const tasks = (guildState.tasks||[]).filter(t=>t.id!==id);
+    pendingGuildTaskDeleteId = null;
+    await guildCollection().doc(state.guildCode).update({ tasks, updatedAt: Date.now() });
+  }
+
+  async function completeGuildTask(id){
+    if(!guildState || !state.guildCode) return;
+    const tasks = (guildState.tasks||[]).map(t=>({...t}));
+    const t = tasks.find(t=>t.id===id);
+    if(!t || t.completed) return;
+    if(t.running){ t.elapsedSeconds += (Date.now()-t.startedAt)/1000; t.running=false; }
+    const hasEst = t.estimateMinutes != null && t.estimateMinutes > 0;
+    const withinTime = hasEst ? (t.elapsedSeconds <= t.estimateMinutes*60) : true;
+    const multiplier = hasEst ? (withinTime ? 1.5 : 0.7) : 1.0;
+    const dmg = Math.max(1, Math.round(state.atk * multiplier));
+    t.completed = true;
+    t.completedBy = state.guildDisplayName;
+
+    const docRef = guildCollection().doc(state.guildCode);
+    const members = (guildState.members||[]).map(m=>m.name===state.guildDisplayName ? {...m, contribution:(m.contribution||0)+dmg} : m);
+    const boss = {...(guildState.boss||defaultGuildBoss(1))};
+    boss.hp -= dmg;
+    const logs = [`「${escapeHtml(t.name)}」を${escapeHtml(state.guildDisplayName)}が討伐完了。ギルドボスに${dmg}のダメージ`, ...(guildState.logs||[])].slice(0,50);
+
+    if(boss.hp <= 0){
+      const nextLevel = boss.level + 1;
+      const respawned = defaultGuildBoss(nextLevel);
+      logs.unshift(`<span class="win">${boss.name} を打ち倒した！ 次のギルドボスが現れる。</span>`);
+      await docRef.update({ tasks, members, boss: respawned, logs, updatedAt: Date.now() });
+    } else {
+      await docRef.update({ tasks, members, boss, logs, updatedAt: Date.now() });
+    }
+  }
+
+  document.getElementById('createGuildBtn').addEventListener('click', createGuild);
+  document.getElementById('joinGuildBtn').addEventListener('click', joinGuild);
+  document.getElementById('leaveGuildBtn').addEventListener('click', leaveGuild);
+  document.getElementById('addGuildTaskBtn').addEventListener('click', addGuildTask);
+  document.getElementById('guildTaskInput').addEventListener('keydown', e=>{
+    if(e.key==='Enter') addGuildTask();
+  });
+  document.getElementById('guildTaskList').addEventListener('click', e=>{
+    const btn = e.target.closest('button[data-gaction]');
+    if(!btn) return;
+    const id = btn.dataset.id;
+    const action = btn.dataset.gaction;
+    if(action==='toggle') toggleGuildTask(id);
+    if(action==='complete') completeGuildTask(id);
+    if(action==='delete'){ pendingGuildTaskDeleteId = id; renderGuildTasks(); }
+    if(action==='confirm-delete') deleteGuildTask(id);
+    if(action==='cancel-delete'){ pendingGuildTaskDeleteId = null; renderGuildTasks(); }
+  });
+
+  document.getElementById('fleeBtn').addEventListener('click', fleeEncounter);
+
+  document.getElementById('addBtn').addEventListener('click', ()=>{
+    const nameEl = document.getElementById('taskInput');
+    const estEl = document.getElementById('estInput');
+    const dateEl = document.getElementById('dateInput');
+    const genreEl = document.getElementById('genreInput');
+    const strictEl = document.getElementById('strictInput');
+    const recurEl = document.getElementById('recurrenceInput');
+    const name = nameEl.value.trim();
+    if(!name) return;
+    const est = estEl.value ? parseInt(estEl.value,10) : null;
+    addTask(name, est, dateEl.value, genreEl.value.trim(), strictEl.checked, recurEl.value || null);
+    nameEl.value=''; estEl.value=''; dateEl.value=''; genreEl.value=''; strictEl.checked = true; recurEl.value='';
+    saveState();
+    renderTasks();
+  });
+
+  document.getElementById('addQuestBtn').addEventListener('click', ()=>{
+    const nameEl = document.getElementById('questInput');
+    const typeEl = document.getElementById('questTypeInput');
+    const name = nameEl.value.trim();
+    if(!name) return;
+    addQuest(name, typeEl.value);
+    nameEl.value = '';
+    saveState();
+    renderQuests();
+  });
+  document.getElementById('questInput').addEventListener('keydown', e=>{
+    if(e.key==='Enter') document.getElementById('addQuestBtn').click();
+  });
+  document.getElementById('questList').addEventListener('click', e=>{
+    const btn = e.target.closest('button[data-qaction]');
+    if(!btn) return;
+    const id = btn.dataset.id;
+    const action = btn.dataset.qaction;
+    if(action==='complete') completeQuest(id);
+    if(action==='delete') deleteQuest(id);
+  });
+
+  document.getElementById('syncBody').addEventListener('click', async e=>{
+    const btn = e.target.closest('button[data-sync-action]');
+    if(!btn) return;
+    const action = btn.dataset.syncAction;
+    const setStatus = (msg)=>{ const el = document.getElementById('syncStatus'); if(el) el.textContent = msg; };
+
+    if(action === 'generate'){
+      if(!db){ setStatus('通信の準備ができていない。少し待って再試行してほしい。'); return; }
+      state.syncCode = genGuildCode() + genGuildCode();
+      await pushStateToCloud();
+      saveState();
+      renderSyncPanel();
+    }
+    if(action === 'link'){
+      if(!db){ setStatus('通信の準備ができていない。少し待って再試行してほしい。'); return; }
+      const codeEl = document.getElementById('syncCodeInput');
+      const code = codeEl.value.trim().toUpperCase();
+      if(!code) return;
+      const remote = await pullStateFromCloud(code);
+      if(!remote){ setStatus('そのコードのデータは見つからなかった。'); return; }
+      pendingLinkCode = code;
+      renderSyncPanel();
+    }
+    if(action === 'confirm-link'){
+      const remote = await pullStateFromCloud(pendingLinkCode);
+      if(remote){
+        const remoteState = JSON.parse(remote.data);
+        remoteState.syncCode = pendingLinkCode;
+        if(!remoteState.inventory) remoteState.inventory = {hpPotion:0, mpPotion:0};
+        state = remoteState;
+        pendingLinkCode = null;
+        saveState();
+        render();
+        renderSyncPanel();
+      }
+    }
+    if(action === 'cancel-link'){
+      pendingLinkCode = null;
+      renderSyncPanel();
+    }
+    if(action === 'sync-now'){
+      const ok = await pushStateToCloud();
+      setStatus(ok ? ('同期しました（'+new Date().toLocaleTimeString()+'）') : '同期に失敗した。通信状況を確認してほしい。');
+    }
+    if(action === 'unlink'){
+      state.syncCode = null;
+      saveState();
+      renderSyncPanel();
+    }
+  });
+
+  document.getElementById('genreFilter').addEventListener('change', e=>{
+    filterGenre = e.target.value;
+    renderTasks();
+  });
+
+  let taskInputEnterArmed = false;
+  const taskInputEl = document.getElementById('taskInput');
+  taskInputEl.addEventListener('keydown', e=>{
+    if(e.key !== 'Enter'){
+      taskInputEnterArmed = false;
+      taskInputEl.classList.remove('enter-armed');
+      return;
+    }
+    if(!taskInputEnterArmed){
+      taskInputEnterArmed = true;
+      taskInputEl.classList.add('enter-armed');
+      taskInputEl.placeholder = 'もう一度Enterで登録';
+      setTimeout(()=>{
+        taskInputEnterArmed = false;
+        taskInputEl.classList.remove('enter-armed');
+        taskInputEl.placeholder = 'タスク名（例：資料作成）';
+      }, 1800);
+    } else {
+      taskInputEnterArmed = false;
+      taskInputEl.classList.remove('enter-armed');
+      taskInputEl.placeholder = 'タスク名（例：資料作成）';
+      document.getElementById('addBtn').click();
+    }
+  });
+
+  document.getElementById('bulkAddBtn').addEventListener('click', ()=>{
+    const area = document.getElementById('bulkInput');
+    const lines = area.value.split('\n').map(l=>l.trim()).filter(l=>l.length>0);
+    if(lines.length===0) return;
+    lines.forEach(line=>{
+      const m = line.match(/^(.*?)[\s,、]+(\d+)\s*分?$/);
+      if(m && m[1].trim()){
+        addTask(m[1].trim(), parseInt(m[2],10));
+      } else {
+        addTask(line, null);
+      }
+    });
+    area.value = '';
+    saveState();
+    renderTasks();
+  });
+
+  document.getElementById('taskList').addEventListener('click', e=>{
+    const btn = e.target.closest('button[data-action]');
+    if(!btn) return;
+    const id = btn.dataset.id;
+    const action = btn.dataset.action;
+    if(action==='toggle') toggleTask(id);
+    if(action==='complete') completeTask(id);
+    if(action==='delete'){ pendingDeleteId = id; renderTasks(); }
+    if(action==='confirm-delete') deleteTask(id);
+    if(action==='cancel-delete'){ pendingDeleteId = null; renderTasks(); }
+    if(action==='fail'){ pendingFailId = id; renderTasks(); }
+    if(action==='confirm-fail') failTask(id);
+    if(action==='cancel-fail'){ pendingFailId = null; renderTasks(); }
+    if(action==='edit'){
+      const t = state.tasks.find(t=>t.id===id);
+      if(t && t.running){
+        t.elapsedSeconds += (Date.now()-t.startedAt)/1000;
+        t.running = false;
+      }
+      pendingEditId = id;
+      renderTasks();
+    }
+    if(action==='save-edit') saveTaskEdit(id);
+    if(action==='cancel-edit'){ pendingEditId = null; renderTasks(); }
+    if(action==='restore') restoreTask(id);
+  });
+
+  document.getElementById('skillsGrid').addEventListener('click', e=>{
+    const btn = e.target.closest('button[data-skill]');
+    if(!btn) return;
+    useSkill(btn.dataset.skill);
+  });
+
+  document.getElementById('shopGrid').addEventListener('click', e=>{
+    const buyBtn = e.target.closest('button[data-buy]');
+    const useBtn = e.target.closest('button[data-use]');
+    if(buyBtn) buyItem(buyBtn.dataset.buy, parseInt(buyBtn.dataset.cost,10));
+    if(useBtn) useItem(useBtn.dataset.use);
+  });
+
+  document.getElementById('jobGrid').addEventListener('click', e=>{
+    const btn = e.target.closest('button[data-job]');
+    if(!btn) return;
+    chooseJob(btn.dataset.job);
+  });
+
+  document.getElementById('difficultyGrid').addEventListener('click', e=>{
+    const btn = e.target.closest('button[data-difficulty]');
+    if(!btn) return;
+    const key = btn.dataset.difficulty;
+    if(!DIFFICULTY[key]) return;
+    const oldMax = currentEnemyMaxHp();
+    const frac = oldMax > 0 ? state.enemyHpCurrent / oldMax : 1;
+    state.difficulty = key;
+    const newMax = currentEnemyMaxHp();
+    state.enemyHpCurrent = Math.round(newMax * frac);
+    addLog(`難易度を「${DIFFICULTY[key].label}」に変更した。`);
+    saveState();
+    render();
+  });
+
+  function chooseJob(jobId){
+    if(state.job) return;
+    const job = JOBS.find(j=>j.id===jobId);
+    if(!job) return;
+    const bonus = {atk:0, maxHp:0, maxMp:0, def:0};
+    if(job.atkMul){ const v = Math.round(state.atk*job.atkMul); bonus.atk = v - state.atk; state.atk = v; }
+    if(job.hpMul){ const v = Math.round(state.maxHp*job.hpMul); bonus.maxHp = v - state.maxHp; state.maxHp = v; state.hp = state.maxHp; }
+    if(job.mpMul){ const v = Math.round(state.maxMp*job.mpMul); bonus.maxMp = v - state.maxMp; state.maxMp = v; state.mp = state.maxMp; }
+    if(job.defMul){ const v = Math.round(state.def*job.defMul); bonus.def = v - state.def; state.def = v; }
+    state.jobStatBonus = bonus;
+    state.jobOnTimeMul = job.onTimeMul || 1;
+    state.jobGoldMul = job.goldMul || 1;
+    state.jobSkillMul = job.skillMul || 1;
+    state.jobHealMul = job.healMul || 1;
+    state.job = jobId;
+    state.pendingJobChoice = false;
+    addLog(`<span class="lv">${job.icon} ${pname()} は${job.name}の道を選んだ。「${job.tagline}」</span>`);
+    saveState();
+    render();
+  }
+
+  document.getElementById('nameInput').addEventListener('change', e=>{
+    state.name = e.target.value.trim();
+    saveState();
+  });
+
+  // --- ポップアップ（スキル・道具・難易度・タスク追加） ---
+  function computeReportStreak(){
+    const DAY = 24*60*60*1000;
+    const todayStart = new Date(); todayStart.setHours(0,0,0,0);
+    let streak = 0;
+    for(let i=0;i<3650;i++){
+      const dayStart = todayStart.getTime() - i*DAY;
+      const dayEnd = dayStart + DAY;
+      const has = state.tasks.some(t=>t.completed && t.completedAt && t.completedAt>=dayStart && t.completedAt<dayEnd);
+      if(has){ streak++; }
+      else if(i===0){ continue; }
+      else { break; }
+    }
+    return streak;
+  }
+
+  function computeReportData(){
+    const now = new Date();
+    const days = [];
+    for(let i=6;i>=0;i--){
+      const d = new Date(now); d.setDate(d.getDate()-i); d.setHours(0,0,0,0);
+      days.push(d);
+    }
+    const dayCounts = days.map(d=>{
+      const next = new Date(d); next.setDate(next.getDate()+1);
+      const count = state.tasks.filter(t=>t.completed && t.completedAt && t.completedAt>=d.getTime() && t.completedAt<next.getTime()).length;
+      return { label: (d.getMonth()+1)+'/'+d.getDate(), count };
+    });
+    const genreCounts = {};
+    state.tasks.filter(t=>t.completed).forEach(t=>{
+      const g = t.genre || '未分類';
+      genreCounts[g] = (genreCounts[g]||0) + 1;
+    });
+    return { dayCounts, genreCounts, streak: computeReportStreak() };
+  }
+
+  function renderReport(){
+    const data = computeReportData();
+    const maxDay = Math.max(1, ...data.dayCounts.map(d=>d.count));
+    const dayBars = data.dayCounts.map(d=>`
+      <div style="display:flex; flex-direction:column; align-items:center; gap:4px; flex:1;">
+        <div style="width:100%; max-width:28px; height:70px; display:flex; align-items:flex-end;">
+          <div style="width:100%; height:${Math.max(4,Math.round(d.count/maxDay*100))}%; background:var(--fire-dim); border-radius:4px 4px 0 0;"></div>
+        </div>
+        <div style="font-family:var(--font-mono); font-size:10px; color:var(--ink-dim);">${d.label}</div>
+        <div style="font-family:var(--font-mono); font-size:11px; color:var(--ink);">${d.count}</div>
+      </div>`).join('');
+
+    const genreEntries = Object.entries(data.genreCounts).sort((a,b)=>b[1]-a[1]);
+    const maxGenre = Math.max(1, ...genreEntries.map(e=>e[1]));
+    const genreBars = genreEntries.length ? genreEntries.map(([g,c])=>{
+      const color = genreColor(g);
+      return `
+      <div style="margin-bottom:8px;">
+        <div style="display:flex; justify-content:space-between; font-size:12px; color:var(--ink-dim); margin-bottom:3px;">
+          <span><span style="display:inline-block; width:9px; height:9px; border-radius:2px; background:${color}; margin-right:6px;"></span>${escapeHtml(g)}</span><span>${c}</span>
+        </div>
+        <div class="bar"><div class="bar-fill" style="width:${Math.round(c/maxGenre*100)}%; background:${color};"></div></div>
+      </div>`;
+    }).join('') : '<div class="bulk-hint">まだ討伐記録がない。</div>';
+
+    const rate = state.tasksCompleted ? Math.round(state.onTimeCompleted/state.tasksCompleted*100) : 0;
+
+    document.getElementById('reportBody').innerHTML = `
+      <div class="stat-grid" style="margin-top:0;">
+        <div>総討伐数<b>${state.tasksCompleted}</b></div>
+        <div>累計獲得XP<b>${state.totalXpEarned||0}</b></div>
+        <div>累計獲得G<b>${state.totalGoldEarned||0}</b></div>
+        <div>討伐ボス数<b>${state.bossesDefeated||0}</b></div>
+        <div>期限内率<b>${state.tasksCompleted?rate+'%':'—'}</b></div>
+        <div>連続討伐日数<b>${data.streak}日</b></div>
+      </div>
+      <div class="section-title" style="margin:22px 0 10px;">直近7日間の討伐数</div>
+      <div style="display:flex; gap:6px; align-items:flex-end;">${dayBars}</div>
+      <div class="section-title" style="margin:22px 0 10px;">ジャンル別討伐数</div>
+      ${genreBars}
+    `;
+  }
+
+  function openModal(id){
+    document.getElementById('modalBackdrop').classList.add('show');
+    const m = document.getElementById(id);
+    if(m) m.classList.add('show');
+    if(id === 'reportModal') renderReport();
+    if(id === 'questModal') renderQuests();
+    if(id === 'syncModal'){ pendingLinkCode = null; renderSyncPanel(); }
+  }
+  function closeAllModals(){
+    document.getElementById('modalBackdrop').classList.remove('show');
+    document.querySelectorAll('.modal-panel').forEach(m=>m.classList.remove('show'));
+  }
+  document.querySelectorAll('.menu-trigger[data-modal]').forEach(btn=>{
+    btn.addEventListener('click', ()=> openModal(btn.dataset.modal));
+  });
+  document.querySelectorAll('[data-close]').forEach(btn=>{
+    btn.addEventListener('click', closeAllModals);
+  });
+  document.getElementById('modalBackdrop').addEventListener('click', closeAllModals);
+
+  document.getElementById('soundToggleBtn').addEventListener('click', ()=>{
+    state.soundOn = !state.soundOn;
+    document.getElementById('soundToggleBtn').textContent = state.soundOn ? '🔊' : '🔇';
+    if(state.soundOn) sfxClick();
+    saveState();
+  });
+
+  document.getElementById('confirmResetBtn').addEventListener('click', async ()=>{
+    if(guildUnsub){ guildUnsub(); guildUnsub = null; }
+    try{ localStorage.removeItem(STORE_KEY); }catch(e){ /* ignore */ }
+    try{ await storageSet(STORE_KEY, JSON.stringify(defaultState())); }catch(e){ /* ignore */ }
+    location.reload();
+  });
+
+  document.addEventListener('keydown', e=>{
+    if(e.key === 'Escape') closeAllModals();
+  });
+
+  async function init(){
+    await loadState();
+    render();
+    document.getElementById('guildDisplayName').value = state.guildDisplayName || '';
+    if(state.guildCode){
+      subscribeGuild(state.guildCode);
+    }
+    if(state.syncCode){
+      const remote = await pullStateFromCloud(state.syncCode);
+      if(remote && remote.updatedAt > (state.updatedAt||0)){
+        const remoteState = JSON.parse(remote.data);
+        remoteState.syncCode = state.syncCode;
+        if(!remoteState.inventory) remoteState.inventory = {hpPotion:0, mpPotion:0};
+        state = remoteState;
+        addLog('別の端末での進行を読み込んだ。');
+        render();
+      }
+    }
+    timerInterval = setInterval(tickTimers, 1000);
+  }
+
+  init();
+})();
+</script>
+</body>
+</html>
