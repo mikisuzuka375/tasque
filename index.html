@@ -544,6 +544,8 @@
     <button class="menu-trigger secondary" data-modal="reportModal">📊 レポート</button>
     <button class="menu-trigger secondary" id="soundToggleBtn" style="width:auto;">🔊</button>
     <button class="menu-trigger secondary" data-modal="syncModal">☁️ 同期</button>
+    <button class="menu-trigger secondary" data-modal="historyModal">📜 履歴</button>
+    <button class="menu-trigger secondary" id="changeJobBtn" style="width:auto;">🎭 ジョブ変更</button>
     <button class="menu-trigger secondary" data-modal="resetModal" style="color:var(--blood);">⚠️ 初期化</button>
   </div>
 
@@ -582,6 +584,13 @@
         <button id="bulkAddBtn" style="width:auto">まとめて追加</button>
       </div>
     </div>
+
+    <div class="section-title" style="margin:22px 0 10px;">ジャンルの管理</div>
+    <div id="genreManageList" style="display:flex; flex-wrap:wrap; gap:6px; margin-bottom:10px;"></div>
+    <div class="add-form">
+      <input type="text" id="newGenreInput" placeholder="新しいジャンル名">
+      <button id="addGenreBtn" style="width:auto;">追加</button>
+    </div>
   </div>
 
   <div class="modal-panel" id="skillsModal">
@@ -615,12 +624,25 @@
       <button id="addQuestBtn" style="width:auto">追加</button>
     </div>
     <div class="bulk-hint" style="margin:-6px 0 10px;">達成できないまま日付・週が変わると、自動でダメージを受ける</div>
+    <div style="display:flex; gap:8px; margin:14px 0;">
+      <button id="questTabDaily" style="width:auto;">🗓️毎日</button>
+      <button class="secondary" id="questTabWeekly" style="width:auto;">🗓️毎週</button>
+    </div>
     <div id="questList"></div>
   </div>
 
   <div class="modal-panel" id="syncModal" style="max-width:480px;">
     <div class="modal-panel-head"><span>☁️ 端末間の同期</span><button class="modal-close" data-close>✕</button></div>
     <div id="syncBody"></div>
+  </div>
+
+  <div class="modal-panel" id="historyModal" style="max-width:560px;">
+    <div class="modal-panel-head"><span>履歴（直近10件）</span><button class="modal-close" data-close>✕</button></div>
+    <div style="display:flex; gap:8px; margin-bottom:14px;">
+      <button id="historyTabCompleted" style="width:auto;">達成済み</button>
+      <button class="secondary" id="historyTabDeleted" style="width:auto;">削除・未達成</button>
+    </div>
+    <div id="historyBody"></div>
   </div>
 
   <div class="modal-panel" id="resetModal" style="max-width:440px;">
@@ -696,7 +718,6 @@
 (function(){
   const STORE_KEY = 'rpg-todo-state-v1';
   const JOB_UNLOCK_LEVEL = 3;
-  const JOB_RESPEC_LEVEL = 10;
   let state = null;
   let timerInterval = null;
 
@@ -733,10 +754,24 @@
   ];
 
   const JOBS = [
-    {id:'swordsman', name:'剣士', icon:'⚔️', tagline:'力こそ全て。真正面から打ち倒す。', desc:'攻撃力+25%／最大HP+15%', atkMul:1.25, hpMul:1.15},
-    {id:'sage', name:'賢者', icon:'📖', tagline:'魔を極め、術で戦況を変える。', desc:'最大MP+50%／スキル威力+30%', mpMul:1.5, skillMul:1.3},
-    {id:'scout', name:'密偵', icon:'🗡️', tagline:'見積もりの妙こそ、我が武器。', desc:'予定内討伐の恩恵+25%／獲得ゴールド+25%', onTimeMul:1.25, goldMul:1.25},
-    {id:'paladin', name:'聖騎士', icon:'🛡️', tagline:'守りに長け、崩れず進み続ける。', desc:'防御力+35%／回復効果+30%', defMul:1.35, healMul:1.3}
+    {id:'swordsman', name:'剣士', icon:'⚔️', tagline:'力こそ全て。真正面から打ち倒す。',
+      desc:'攻撃力+30%／最大HP+15% ・ 最大MP-30%',
+      atkMul:1.30, hpMul:1.15, mpMul:0.7},
+    {id:'sage', name:'魔導士', icon:'🔮', tagline:'魔を極め、術で戦況を変える。',
+      desc:'スキル威力+40%／最大MP+60% ・ 攻撃力-15%／防御力-30%／最大HP-25%',
+      skillMul:1.4, mpMul:1.6, atkMul:0.85, defMul:0.7, hpMul:0.75},
+    {id:'scout', name:'密偵', icon:'🗡️', tagline:'見積もりの妙こそ、我が武器。',
+      desc:'予定内討伐の恩恵+25%／獲得ゴールド+25% ・ 防御力-15%／最大HP-10%',
+      onTimeMul:1.25, goldMul:1.25, defMul:0.85, hpMul:0.9},
+    {id:'paladin', name:'聖騎士', icon:'🛡️', tagline:'守りに長け、崩れず進み続ける。',
+      desc:'防御力+40%／回復効果+20%／最大HP+20% ・ 攻撃力-15%',
+      defMul:1.4, healMul:1.2, hpMul:1.2, atkMul:0.85},
+    {id:'healer', name:'僧侶', icon:'✚', tagline:'剣は取らず、癒やしと共に歩む。',
+      desc:'回復効果+60%／最大MP+30% ・ 攻撃力-40%／防御力-20%',
+      healMul:1.6, mpMul:1.3, atkMul:0.6, defMul:0.8},
+    {id:'guardian', name:'守護者', icon:'🧱', tagline:'ただ耐える。それこそが役目。',
+      desc:'防御力+60%／最大HP+30% ・ 攻撃力-30%／最大MP-40%／スキル威力-20%',
+      defMul:1.6, hpMul:1.3, atkMul:0.7, mpMul:0.6, skillMul:0.8}
   ];
 
   const AREAS = [
@@ -1037,6 +1072,9 @@
       inventory:{hpPotion:0, mpPotion:0},
       tasks:[],
       quests:[],
+      completedHistory:[],
+      deletedHistory:[],
+      customGenres:['仕事','私用','学習','家事','健康'],
       logs:[],
       enemyHpCurrent:null,
       activeBoss:null,
@@ -1058,13 +1096,57 @@
   let pendingDeleteId = null;
   let pendingFailId = null;
   let pendingEditId = null;
-  const DEFAULT_GENRES = ['仕事','私用','学習','家事','健康'];
+  let historyTab = 'completed';
+  let questTab = 'daily';
   const GENRE_COLORS = ['#e08b3d','#5c8aa1','#a83232','#5f8a5a','#c9a227','#8a5ac8','#4fb0a5','#c2577a'];
   function genreColor(g){
     if(!g) return 'var(--arcane-dim)';
     let hash = 0;
     for(let i=0;i<g.length;i++){ hash = (hash*31 + g.charCodeAt(i)) % 100000; }
     return GENRE_COLORS[hash % GENRE_COLORS.length];
+  }
+
+  function renderGenreManageList(){
+    const el = document.getElementById('genreManageList');
+    if(!el) return;
+    const genres = state.customGenres || [];
+    el.innerHTML = genres.length ? genres.map(g=>`
+      <span class="genre-badge" style="background:${genreColor(g)}; display:inline-flex; align-items:center; gap:5px;">
+        ${escapeHtml(g)}
+        <button data-remove-genre="${escapeHtml(g)}" style="width:auto; background:transparent; border:none; color:inherit; padding:0; font-size:12px; cursor:pointer;">✕</button>
+      </span>`).join('') : '<span class="bulk-hint">まだジャンルがない。</span>';
+  }
+
+  function renderHistoryPanel(){
+    const tabC = document.getElementById('historyTabCompleted');
+    const tabD = document.getElementById('historyTabDeleted');
+    if(!tabC || !tabD) return;
+    tabC.classList.toggle('secondary', historyTab !== 'completed');
+    tabD.classList.toggle('secondary', historyTab !== 'deleted');
+    const listName = historyTab === 'completed' ? 'completedHistory' : 'deletedHistory';
+    const list = state[listName] || [];
+    const body = document.getElementById('historyBody');
+    if(list.length === 0){
+      body.innerHTML = '<div class="empty">まだ記録がない。</div>';
+      return;
+    }
+    body.innerHTML = list.map(t=>{
+      const ts = historyTab === 'completed' ? t.completedAt : t.deletedAt;
+      const when = ts ? new Date(ts).toLocaleString('ja-JP',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'}) : '';
+      const reasonLabel = historyTab === 'deleted' ? (t.deleteReason === 'failed' ? '未達成' : '削除') : '討伐済';
+      return `
+        <div class="task done">
+          <div class="task-top">
+            <div>
+              <div class="task-name strike">${escapeHtml(t.name)}</div>
+              <div class="task-meta"><span class="genre-badge">${reasonLabel}</span><span>${when}</span></div>
+            </div>
+          </div>
+          <div class="task-controls">
+            <button data-history-action="restore" data-list="${listName}" data-id="${t.id}" style="width:auto;">復元</button>
+          </div>
+        </div>`;
+    }).join('');
   }
 
   function pname(){ return (state.name && state.name.trim()) ? state.name.trim() : '名もなき者'; }
@@ -1187,18 +1269,25 @@
     const now = Date.now();
     const DAY = 24*60*60*1000;
     let anyRefreshed = false;
-    state.tasks.forEach(t=>{
-      if(!t.recurrence || !t.completed || !t.completedAt) return;
-      const interval = t.recurrence === 'weekly' ? 7*DAY : DAY;
-      if(now - t.completedAt >= interval){
-        t.completed = false;
-        t.elapsedSeconds = 0;
-        t.running = false;
-        t.startedAt = null;
-        anyRefreshed = true;
-        addLog(`<span class="area">🔁「${escapeHtml(t.name)}」が再び挑戦可能になった。</span>`);
+    const stillInHistory = [];
+    (state.completedHistory||[]).forEach(t=>{
+      if(t.recurrence && t.completedAt){
+        const interval = t.recurrence === 'weekly' ? 7*DAY : DAY;
+        if(now - t.completedAt >= interval){
+          t.completed = false;
+          t.elapsedSeconds = 0;
+          t.running = false;
+          t.startedAt = null;
+          t.completedAt = null;
+          state.tasks.unshift(t);
+          anyRefreshed = true;
+          addLog(`<span class="area">🔁「${escapeHtml(t.name)}」が再び挑戦可能になった。</span>`);
+          return;
+        }
       }
+      stillInHistory.push(t);
     });
+    state.completedHistory = stillInHistory;
     if(anyRefreshed) saveState();
   }
 
@@ -1271,11 +1360,17 @@
   }
 
   function renderQuests(){
+    const tabDailyBtn = document.getElementById('questTabDaily');
+    const tabWeeklyBtn = document.getElementById('questTabWeekly');
+    if(tabDailyBtn && tabWeeklyBtn){
+      tabDailyBtn.classList.toggle('secondary', questTab !== 'daily');
+      tabWeeklyBtn.classList.toggle('secondary', questTab !== 'weekly');
+    }
     const listEl = document.getElementById('questList');
     if(!listEl) return;
-    const quests = state.quests || [];
+    const quests = (state.quests || []).filter(q=>q.type === questTab);
     if(quests.length === 0){
-      listEl.innerHTML = '<div class="empty">デイリー・ウィークリークエストを追加しよう。</div>';
+      listEl.innerHTML = `<div class="empty">${questTab==='daily'?'デイリー':'ウィークリー'}クエストを追加しよう。</div>`;
       return;
     }
     listEl.innerHTML = '';
@@ -1695,28 +1790,7 @@
         </div>`;
     }).join('');
 
-    const respecCost = Math.round(200 * state.loopGrowth);
-    const canRespec = state.job && state.level >= JOB_RESPEC_LEVEL;
-    const canAfford = state.gold >= respecCost;
-    html += `
-      <div class="item-card job-card">
-        <div class="skill-top">
-          <span class="skill-name">📜 転職の書</span>
-        </div>
-        <div class="skill-desc">${canRespec ? 'これまでの生き方を捨て、ジョブを選び直す' : `Lv.${JOB_RESPEC_LEVEL}・ジョブ選択済みで解禁`}</div>
-        <button class="magic" id="respecBtn" ${(!canRespec||!canAfford)?'disabled':''}>
-          ${canRespec ? (canAfford ? `転職する (${respecCost}G)` : `転職する (${respecCost}G・ゴールド不足)`) : '未解禁'}
-        </button>
-      </div>`;
     grid.innerHTML = html;
-    const respecBtn = document.getElementById('respecBtn');
-    if(respecBtn){
-      respecBtn.addEventListener('click', ()=>{
-        if(!canRespec || state.gold < respecCost) return;
-        state.gold -= respecCost;
-        respecJob();
-      });
-    }
   }
 
   function respecJob(){
@@ -1731,7 +1805,7 @@
     state.job = null;
     state.jobOnTimeMul = 1; state.jobGoldMul = 1; state.jobSkillMul = 1; state.jobHealMul = 1;
     state.pendingJobChoice = true;
-    addLog(`<span class="lv">転職の書を使い、${pname()}はこれまでの生き方を捨てた。新たな道を選び直せる。</span>`);
+    addLog(`<span class="lv">${pname()}はこれまでの生き方を捨てた。新たな道を選び直せる。</span>`);
     saveState();
     render();
   }
@@ -1746,13 +1820,13 @@
 
   function refreshGenreOptions(){
     const distinct = Array.from(new Set(state.tasks.map(t=>t.genre).filter(g=>g)));
-    const all = Array.from(new Set([...DEFAULT_GENRES, ...distinct]));
+    const all = Array.from(new Set([...(state.customGenres||[]), ...distinct]));
     const datalist = document.getElementById('genreList');
     datalist.innerHTML = all.map(g=>`<option value="${escapeHtml(g)}"></option>`).join('');
     const filterEl = document.getElementById('genreFilter');
     const prevVal = filterEl.value;
-    filterEl.innerHTML = '<option value="">すべて</option>' + distinct.map(g=>`<option value="${escapeHtml(g)}">${escapeHtml(g)}</option>`).join('');
-    filterEl.value = distinct.includes(prevVal) ? prevVal : '';
+    filterEl.innerHTML = '<option value="">すべて</option>' + all.map(g=>`<option value="${escapeHtml(g)}">${escapeHtml(g)}</option>`).join('');
+    filterEl.value = all.includes(prevVal) ? prevVal : '';
     filterGenre = filterEl.value;
   }
 
@@ -1976,11 +2050,24 @@
     }
     processLevelUps();
 
+    // 繰り返し設定のあるタスクは、期限が来たら自動で戻せるよう履歴側で管理する。
+    // それ以外は一覧から消し、達成履歴（直近10件）に移す。
+    state.tasks = state.tasks.filter(x=>x.id!==id);
+    state.completedHistory.unshift(t);
+    state.completedHistory = state.completedHistory.slice(0, 10);
+
     saveState();
     render();
   }
 
   function deleteTask(id){
+    const t = state.tasks.find(t=>t.id===id);
+    if(t){
+      t.deletedAt = Date.now();
+      t.deleteReason = 'deleted';
+      state.deletedHistory.unshift(t);
+      state.deletedHistory = state.deletedHistory.slice(0, 10);
+    }
     state.tasks = state.tasks.filter(t=>t.id!==id);
     pendingDeleteId = null;
     saveState();
@@ -1996,6 +2083,10 @@
     playCounterEmote(dmg);
     sfxCounter();
     addLog(`<span class="fall">「${escapeHtml(t.name)}」を未達成にした。${dmg}のダメージを受けた。</span>`);
+    t.deletedAt = Date.now();
+    t.deleteReason = 'failed';
+    state.deletedHistory.unshift(t);
+    state.deletedHistory = state.deletedHistory.slice(0, 10);
     state.tasks = state.tasks.filter(x=>x.id!==id);
     pendingFailId = null;
     if(state.hp <= 0){ handlePlayerDefeat(); }
@@ -2010,6 +2101,26 @@
     addLog(`「${escapeHtml(t.name)}」を復元した。（すでに得た報酬は変わらない）`);
     saveState();
     renderTasks();
+  }
+
+  function restoreFromHistory(listName, id){
+    const list = state[listName] || [];
+    const idx = list.findIndex(t=>t.id===id);
+    if(idx === -1) return;
+    const t = list[idx];
+    list.splice(idx, 1);
+    t.completed = false;
+    t.elapsedSeconds = 0;
+    t.running = false;
+    t.startedAt = null;
+    t.completedAt = null;
+    t.deletedAt = null;
+    t.deleteReason = null;
+    state.tasks.unshift(t);
+    addLog(`「${escapeHtml(t.name)}」を復元した。`);
+    saveState();
+    render();
+    renderHistoryPanel();
   }
 
   function saveTaskEdit(id){
@@ -2436,6 +2547,7 @@
   document.getElementById('leaveGuildBtn').addEventListener('click', leaveGuild);
   document.getElementById('addGuildTaskBtn').addEventListener('click', addGuildTask);
   document.getElementById('guildTaskInput').addEventListener('keydown', e=>{
+    if(e.isComposing || e.keyCode === 229) return;
     if(e.key==='Enter') addGuildTask();
   });
   document.getElementById('guildTaskList').addEventListener('click', e=>{
@@ -2474,12 +2586,22 @@
     const name = nameEl.value.trim();
     if(!name) return;
     addQuest(name, typeEl.value);
+    questTab = typeEl.value;
     nameEl.value = '';
     saveState();
     renderQuests();
   });
   document.getElementById('questInput').addEventListener('keydown', e=>{
+    if(e.isComposing || e.keyCode === 229) return;
     if(e.key==='Enter') document.getElementById('addQuestBtn').click();
+  });
+  document.getElementById('questTabDaily').addEventListener('click', ()=>{
+    questTab = 'daily';
+    renderQuests();
+  });
+  document.getElementById('questTabWeekly').addEventListener('click', ()=>{
+    questTab = 'weekly';
+    renderQuests();
   });
   document.getElementById('questList').addEventListener('click', e=>{
     const btn = e.target.closest('button[data-qaction]');
@@ -2541,6 +2663,45 @@
     }
   });
 
+  document.getElementById('historyTabCompleted').addEventListener('click', ()=>{
+    historyTab = 'completed';
+    renderHistoryPanel();
+  });
+  document.getElementById('historyTabDeleted').addEventListener('click', ()=>{
+    historyTab = 'deleted';
+    renderHistoryPanel();
+  });
+  document.getElementById('historyBody').addEventListener('click', e=>{
+    const btn = e.target.closest('button[data-history-action]');
+    if(!btn) return;
+    if(btn.dataset.historyAction === 'restore') restoreFromHistory(btn.dataset.list, btn.dataset.id);
+  });
+
+  document.getElementById('genreManageList').addEventListener('click', e=>{
+    const btn = e.target.closest('button[data-remove-genre]');
+    if(!btn) return;
+    const g = btn.dataset.removeGenre;
+    state.customGenres = (state.customGenres||[]).filter(x=>x!==g);
+    saveState();
+    renderGenreManageList();
+    refreshGenreOptions();
+  });
+  document.getElementById('addGenreBtn').addEventListener('click', ()=>{
+    const inp = document.getElementById('newGenreInput');
+    const name = inp.value.trim();
+    if(!name) return;
+    if(!state.customGenres) state.customGenres = [];
+    if(!state.customGenres.includes(name)) state.customGenres.push(name);
+    inp.value = '';
+    saveState();
+    renderGenreManageList();
+    refreshGenreOptions();
+  });
+  document.getElementById('newGenreInput').addEventListener('keydown', e=>{
+    if(e.isComposing || e.keyCode === 229) return;
+    if(e.key === 'Enter') document.getElementById('addGenreBtn').click();
+  });
+
   document.getElementById('genreFilter').addEventListener('change', e=>{
     filterGenre = e.target.value;
     renderTasks();
@@ -2549,6 +2710,7 @@
   let taskInputEnterArmed = false;
   const taskInputEl = document.getElementById('taskInput');
   taskInputEl.addEventListener('keydown', e=>{
+    if(e.isComposing || e.keyCode === 229) return; // 日本語変換確定のEnterは無視する
     if(e.key !== 'Enter'){
       taskInputEnterArmed = false;
       taskInputEl.classList.remove('enter-armed');
@@ -2761,6 +2923,8 @@
     if(id === 'reportModal') renderReport();
     if(id === 'questModal') renderQuests();
     if(id === 'syncModal'){ pendingLinkCode = null; renderSyncPanel(); }
+    if(id === 'historyModal') renderHistoryPanel();
+    if(id === 'taskAddModal') renderGenreManageList();
   }
   function closeAllModals(){
     document.getElementById('modalBackdrop').classList.remove('show');
@@ -2779,6 +2943,16 @@
     document.getElementById('soundToggleBtn').textContent = state.soundOn ? '🔊' : '🔇';
     if(state.soundOn) sfxClick();
     saveState();
+  });
+
+  document.getElementById('changeJobBtn').addEventListener('click', ()=>{
+    if(state.job){
+      respecJob();
+    } else {
+      state.pendingJobChoice = true;
+      render();
+    }
+    document.getElementById('jobChoiceSection').scrollIntoView({behavior:'smooth', block:'center'});
   });
 
   document.getElementById('confirmResetBtn').addEventListener('click', async ()=>{
