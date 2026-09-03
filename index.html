@@ -1261,8 +1261,18 @@
     if(state.enemyHpCurrent == null){
       spawnEncounter(false);
     }
+    migrateLegacyCompletedTasks();
     refreshRecurringTasks();
     refreshQuests();
+  }
+
+  // 履歴機能を追加する前から一覧に残っていた「達成済み」タスクを、達成履歴へ移す（一度だけ）
+  function migrateLegacyCompletedTasks(){
+    const legacyCompleted = state.tasks.filter(t=>t.completed);
+    if(legacyCompleted.length === 0) return;
+    state.tasks = state.tasks.filter(t=>!t.completed);
+    legacyCompleted.sort((a,b)=>(b.completedAt||0)-(a.completedAt||0));
+    state.completedHistory = legacyCompleted.concat(state.completedHistory||[]).slice(0, 10);
   }
 
   function refreshRecurringTasks(){
@@ -1900,12 +1910,11 @@
       div.innerHTML = `
         <div class="task-top">
           <div>
-            <div class="task-name ${t.completed?'strike':''}">${escapeHtml(t.name)}</div>
+            <div class="task-name">${escapeHtml(t.name)}</div>
             <div class="task-meta">${metaParts.join('')}</div>
           </div>
-          ${t.completed ? `<button class="secondary" data-action="restore" data-id="${t.id}" style="width:auto; font-size:12px;">復元</button>` : ''}
         </div>
-        ${!t.completed ? (
+        ${
           pendingDeleteId === t.id ? `
           <div class="task-controls">
             <span style="color:var(--blood); font-size:13px;">本当に削除する？</span>
@@ -1927,7 +1936,7 @@
             <button class="danger" data-action="delete" data-id="${t.id}">削除</button>
           </div>`
           )
-        ) : ''}
+        }
       `;
       listEl.appendChild(div);
     });
@@ -2092,15 +2101,6 @@
     if(state.hp <= 0){ handlePlayerDefeat(); }
     saveState();
     render();
-  }
-
-  function restoreTask(id){
-    const t = state.tasks.find(t=>t.id===id);
-    if(!t) return;
-    t.completed = false;
-    addLog(`「${escapeHtml(t.name)}」を復元した。（すでに得た報酬は変わらない）`);
-    saveState();
-    renderTasks();
   }
 
   function restoreFromHistory(listName, id){
@@ -2774,7 +2774,6 @@
     }
     if(action==='save-edit') saveTaskEdit(id);
     if(action==='cancel-edit'){ pendingEditId = null; renderTasks(); }
-    if(action==='restore') restoreTask(id);
   });
 
   document.getElementById('skillsGrid').addEventListener('click', e=>{
