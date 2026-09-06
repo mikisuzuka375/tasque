@@ -552,6 +552,13 @@
   <div class="filter-row">
     <span class="bulk-hint">ジャンルで絞り込み：</span>
     <select id="genreFilter"><option value="">すべて</option></select>
+    <span class="bulk-hint">並び替え：</span>
+    <select id="taskSortSelect">
+      <option value="default">追加順</option>
+      <option value="due">期日が近い順</option>
+      <option value="estimate">想定時間が短い順</option>
+      <option value="genre">ジャンル順</option>
+    </select>
   </div>
   <div id="taskList"></div>
 
@@ -563,8 +570,7 @@
       <input type="text" id="taskInput" placeholder="タスク名（例：資料作成）">
       <input type="number" id="estInput" placeholder="想定分" min="0">
       <input type="date" id="dateInput">
-      <input type="text" id="genreInput" placeholder="ジャンル(任意)" list="genreList">
-      <datalist id="genreList"></datalist>
+      <select id="genreInput"><option value="">ジャンルなし</option></select>
       <label style="display:flex; align-items:center; gap:5px; font-size:12.5px; color:var(--ink-dim);">
         <input type="checkbox" id="strictInput" checked style="width:auto; padding:0;">工数遵守
       </label>
@@ -1098,6 +1104,7 @@
   let pendingEditId = null;
   let historyTab = 'completed';
   let questTab = 'daily';
+  let taskSort = 'default';
   const GENRE_COLORS = ['#e08b3d','#5c8aa1','#a83232','#5f8a5a','#c9a227','#8a5ac8','#4fb0a5','#c2577a'];
   function genreColor(g){
     if(!g) return 'var(--arcane-dim)';
@@ -1831,8 +1838,12 @@
   function refreshGenreOptions(){
     const distinct = Array.from(new Set(state.tasks.map(t=>t.genre).filter(g=>g)));
     const all = Array.from(new Set([...(state.customGenres||[]), ...distinct]));
-    const datalist = document.getElementById('genreList');
-    datalist.innerHTML = all.map(g=>`<option value="${escapeHtml(g)}"></option>`).join('');
+    const genreInputEl = document.getElementById('genreInput');
+    if(genreInputEl){
+      const prevGenreVal = genreInputEl.value;
+      genreInputEl.innerHTML = '<option value="">ジャンルなし</option>' + all.map(g=>`<option value="${escapeHtml(g)}">${escapeHtml(g)}</option>`).join('');
+      genreInputEl.value = all.includes(prevGenreVal) ? prevGenreVal : '';
+    }
     const filterEl = document.getElementById('genreFilter');
     const prevVal = filterEl.value;
     filterEl.innerHTML = '<option value="">すべて</option>' + all.map(g=>`<option value="${escapeHtml(g)}">${escapeHtml(g)}</option>`).join('');
@@ -1840,10 +1851,34 @@
     filterGenre = filterEl.value;
   }
 
+  function sortTasks(list){
+    const sorted = list.slice();
+    if(taskSort === 'due'){
+      sorted.sort((a,b)=>{
+        const av = a.dueDate ? new Date(a.dueDate+'T00:00:00').getTime() : Infinity;
+        const bv = b.dueDate ? new Date(b.dueDate+'T00:00:00').getTime() : Infinity;
+        return av - bv;
+      });
+    } else if(taskSort === 'estimate'){
+      sorted.sort((a,b)=>{
+        const av = (a.estimateMinutes!=null && a.estimateMinutes>0) ? a.estimateMinutes : Infinity;
+        const bv = (b.estimateMinutes!=null && b.estimateMinutes>0) ? b.estimateMinutes : Infinity;
+        return av - bv;
+      });
+    } else if(taskSort === 'genre'){
+      sorted.sort((a,b)=>{
+        const av = a.genre || '\uffff';
+        const bv = b.genre || '\uffff';
+        return av.localeCompare(bv, 'ja');
+      });
+    }
+    return sorted;
+  }
+
   function renderTasks(){
     refreshGenreOptions();
     const listEl = document.getElementById('taskList');
-    const visible = state.tasks.filter(t=> !filterGenre || t.genre === filterGenre);
+    const visible = sortTasks(state.tasks.filter(t=> !filterGenre || t.genre === filterGenre));
     if(visible.length === 0){
       listEl.innerHTML = `<div class="empty">${state.tasks.length===0 ? 'タスクを追加して遠征を始めよう。' : 'このジャンルのタスクはまだない。'}</div>`;
       return;
@@ -1862,7 +1897,10 @@
               <input type="number" data-edit="est" placeholder="想定分" min="0" value="${t.estimateMinutes!=null?t.estimateMinutes:''}" style="width:110px;">
               <input type="number" data-edit="elapsed" placeholder="経過分" min="0" step="0.1" value="${elapsedMinNow?Math.round(elapsedMinNow*10)/10:0}" style="width:110px;">
               <input type="date" data-edit="date" value="${t.dueDate||''}">
-              <input type="text" data-edit="genre" placeholder="ジャンル(任意)" value="${escapeHtml(t.genre||'')}" list="genreList">
+              <select data-edit="genre">
+                <option value="">ジャンルなし</option>
+                ${Array.from(new Set([...(state.customGenres||[]), t.genre].filter(Boolean))).map(g=>`<option value="${escapeHtml(g)}" ${t.genre===g?'selected':''}>${escapeHtml(g)}</option>`).join('')}
+              </select>
               <label style="display:flex; align-items:center; gap:5px; font-size:12.5px; color:var(--ink-dim);">
                 <input type="checkbox" data-edit="strict" ${t.strictMode!==false?'checked':''} style="width:auto; padding:0;">工数遵守
               </label>
@@ -2706,6 +2744,10 @@
     filterGenre = e.target.value;
     renderTasks();
   });
+  document.getElementById('taskSortSelect').addEventListener('change', e=>{
+    taskSort = e.target.value;
+    renderTasks();
+  });
 
   let taskInputEnterArmed = false;
   const taskInputEl = document.getElementById('taskInput');
@@ -2923,7 +2965,7 @@
     if(id === 'questModal') renderQuests();
     if(id === 'syncModal'){ pendingLinkCode = null; renderSyncPanel(); }
     if(id === 'historyModal') renderHistoryPanel();
-    if(id === 'taskAddModal') renderGenreManageList();
+    if(id === 'taskAddModal'){ renderGenreManageList(); refreshGenreOptions(); }
   }
   function closeAllModals(){
     document.getElementById('modalBackdrop').classList.remove('show');
