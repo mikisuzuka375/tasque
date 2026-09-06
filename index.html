@@ -1835,9 +1835,13 @@
     return d < today;
   }
 
-  function refreshGenreOptions(){
+  function getAllGenres(){
     const distinct = Array.from(new Set(state.tasks.map(t=>t.genre).filter(g=>g)));
-    const all = Array.from(new Set([...(state.customGenres||[]), ...distinct]));
+    return Array.from(new Set([...(state.customGenres||[]), ...distinct]));
+  }
+
+  function refreshGenreOptions(){
+    const all = getAllGenres();
     const genreInputEl = document.getElementById('genreInput');
     if(genreInputEl){
       const prevGenreVal = genreInputEl.value;
@@ -1899,7 +1903,7 @@
               <input type="date" data-edit="date" value="${t.dueDate||''}">
               <select data-edit="genre">
                 <option value="">ジャンルなし</option>
-                ${Array.from(new Set([...(state.customGenres||[]), t.genre].filter(Boolean))).map(g=>`<option value="${escapeHtml(g)}" ${t.genre===g?'selected':''}>${escapeHtml(g)}</option>`).join('')}
+                ${Array.from(new Set([...getAllGenres(), t.genre].filter(Boolean))).map(g=>`<option value="${escapeHtml(g)}" ${t.genre===g?'selected':''}>${escapeHtml(g)}</option>`).join('')}
               </select>
               <label style="display:flex; align-items:center; gap:5px; font-size:12.5px; color:var(--ink-dim);">
                 <input type="checkbox" data-edit="strict" ${t.strictMode!==false?'checked':''} style="width:auto; padding:0;">工数遵守
