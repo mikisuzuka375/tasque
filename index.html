@@ -549,6 +549,7 @@
     <button class="menu-trigger secondary" data-modal="difficultyModal">難易度</button>
     <button class="menu-trigger secondary" data-modal="reportModal">📊 レポート</button>
     <button class="menu-trigger secondary" id="soundToggleBtn" style="width:auto;">🔊</button>
+    <button class="menu-trigger secondary" id="reloadBtn" style="width:auto;">🔄 更新</button>
     <button class="menu-trigger secondary" data-modal="syncModal">☁️ 同期</button>
     <button class="menu-trigger secondary" data-modal="historyModal">📜 履歴</button>
     <button class="menu-trigger secondary" id="changeJobBtn" style="width:auto;">🎭 ジョブ変更</button>
@@ -1973,10 +1974,12 @@
       }
       div.innerHTML = `
         <div class="task-top">
-          ${dragEnabled ? `<span class="drag-handle" title="ドラッグで並び替え">⠿</span>` : ''}
-          <div>
-            <div class="task-name">${escapeHtml(t.name)}</div>
-            <div class="task-meta">${metaParts.join('')}</div>
+          <div style="display:flex; gap:8px; align-items:flex-start; min-width:0;">
+            ${dragEnabled ? `<span class="drag-handle" title="ドラッグで並び替え">⠿</span>` : ''}
+            <div>
+              <div class="task-name">${escapeHtml(t.name)}</div>
+              <div class="task-meta">${metaParts.join('')}</div>
+            </div>
           </div>
         </div>
         ${
@@ -3073,6 +3076,10 @@
     document.getElementById('soundToggleBtn').textContent = state.soundOn ? '🔊' : '🔇';
     if(state.soundOn) sfxClick();
     saveState();
+  });
+
+  document.getElementById('reloadBtn').addEventListener('click', ()=>{
+    location.reload();
   });
 
   document.getElementById('changeJobBtn').addEventListener('click', ()=>{
