@@ -1284,6 +1284,22 @@
     if(state.enemyHpCurrent == null){
       spawnEncounter(false);
     }
+
+    // 端末間同期が設定されている場合、繰り返しタスク・クエストの自動判定より前に
+    // クラウド側の方が新しくないか確認する。これを後回しにすると、この端末の古いデータに
+    // 新しいタイムスタンプが付いたまま保存され、他の端末の新しい進行を上書きしてしまう。
+    if(state.syncCode && db){
+      try{
+        const remote = await pullStateFromCloud(state.syncCode);
+        if(remote && remote.updatedAt && remote.updatedAt > (state.updatedAt||0)){
+          const remoteState = JSON.parse(remote.data);
+          remoteState.syncCode = state.syncCode;
+          if(!remoteState.inventory) remoteState.inventory = {hpPotion:0, mpPotion:0};
+          state = remoteState;
+        }
+      }catch(e){ /* 取得できなければローカルのまま進める */ }
+    }
+
     migrateLegacyCompletedTasks();
     refreshRecurringTasks();
     refreshQuests();
@@ -2322,6 +2338,27 @@
     return null;
   }
 
+  let syncUnsub = null;
+  function subscribePersonalSync(code){
+    if(!db || !code) return;
+    if(syncUnsub){ syncUnsub(); syncUnsub = null; }
+    syncUnsub = playersCollection().doc(code).onSnapshot(snap=>{
+      if(!snap.exists) return;
+      const remote = snap.data();
+      if(remote.updatedAt && remote.updatedAt > (state.updatedAt||0)){
+        const remoteState = JSON.parse(remote.data);
+        remoteState.syncCode = code;
+        if(!remoteState.inventory) remoteState.inventory = {hpPotion:0, mpPotion:0};
+        state = remoteState;
+        addLog('別の端末での進行を読み込んだ。');
+        render();
+      }
+    }, err=>{ /* 通信エラーは静かに無視。次の変更で再試行される */ });
+  }
+  function unsubscribePersonalSync(){
+    if(syncUnsub){ syncUnsub(); syncUnsub = null; }
+  }
+
   let pendingLinkCode = null;
 
   function renderSyncPanel(){
@@ -2693,6 +2730,7 @@
       state.syncCode = genGuildCode() + genGuildCode();
       await pushStateToCloud();
       saveState();
+      subscribePersonalSync(state.syncCode);
       renderSyncPanel();
     }
     if(action === 'link'){
@@ -2712,6 +2750,7 @@
         remoteState.syncCode = pendingLinkCode;
         if(!remoteState.inventory) remoteState.inventory = {hpPotion:0, mpPotion:0};
         state = remoteState;
+        subscribePersonalSync(state.syncCode);
         pendingLinkCode = null;
         saveState();
         render();
@@ -2727,6 +2766,7 @@
       setStatus(ok ? ('同期しました（'+new Date().toLocaleTimeString()+'）') : '同期に失敗した。通信状況を確認してほしい。');
     }
     if(action === 'unlink'){
+      unsubscribePersonalSync();
       state.syncCode = null;
       saveState();
       renderSyncPanel();
@@ -3094,6 +3134,7 @@
 
   document.getElementById('confirmResetBtn').addEventListener('click', async ()=>{
     if(guildUnsub){ guildUnsub(); guildUnsub = null; }
+    unsubscribePersonalSync();
     try{ localStorage.removeItem(STORE_KEY); }catch(e){ /* ignore */ }
     try{ await storageSet(STORE_KEY, JSON.stringify(defaultState())); }catch(e){ /* ignore */ }
     location.reload();
@@ -3111,15 +3152,7 @@
       subscribeGuild(state.guildCode);
     }
     if(state.syncCode){
-      const remote = await pullStateFromCloud(state.syncCode);
-      if(remote && remote.updatedAt > (state.updatedAt||0)){
-        const remoteState = JSON.parse(remote.data);
-        remoteState.syncCode = state.syncCode;
-        if(!remoteState.inventory) remoteState.inventory = {hpPotion:0, mpPotion:0};
-        state = remoteState;
-        addLog('別の端末での進行を読み込んだ。');
-        render();
-      }
+      subscribePersonalSync(state.syncCode);
     }
     timerInterval = setInterval(tickTimers, 1000);
   }
