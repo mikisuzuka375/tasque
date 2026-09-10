@@ -4,6 +4,9 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>タスクエ</title>
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <style>
@@ -561,7 +564,7 @@
     <select id="genreFilter"><option value="">すべて</option></select>
     <span class="bulk-hint">並び替え：</span>
     <select id="taskSortSelect">
-      <option value="default">追加順（ドラッグで並び替え可）</option>
+      <option value="default">追加順</option>
       <option value="due">期日が近い順</option>
       <option value="estimate">想定時間が短い順</option>
       <option value="genre">ジャンル順</option>
@@ -570,6 +573,7 @@
       <input type="checkbox" id="dueTodayFilter" style="width:auto; padding:0;">今日期日のみ
     </label>
   </div>
+  <div class="bulk-hint" style="margin:-6px 0 10px;">「⠿」をドラッグで並び替え可能。絞り込み・並び替え中は、条件が同じもの同士（同じ期日・同じ想定時間など）の中で順番を調整できる</div>
   <div id="taskList"></div>
 
   <div class="modal-backdrop" id="modalBackdrop"></div>
@@ -1926,7 +1930,7 @@
       return;
     }
     listEl.innerHTML = '';
-    const dragEnabled = (taskSort === 'default') && !filterDueToday && !filterGenre;
+    const dragEnabled = true;
     visible.forEach(t=>{
       const div = document.createElement('div');
       div.className = 'task' + (t.completed ? ' done' : '');
@@ -2320,10 +2324,18 @@
 
   async function pushStateToCloud(){
     if(!db || !state.syncCode) return false;
+    const docRef = playersCollection().doc(state.syncCode);
+    const myUpdatedAt = state.updatedAt || Date.now();
     try{
-      await playersCollection().doc(state.syncCode).set({
-        data: JSON.stringify(state),
-        updatedAt: state.updatedAt || Date.now()
+      await db.runTransaction(async tx=>{
+        const snap = await tx.get(docRef);
+        const existing = snap.exists ? snap.data() : null;
+        // クラウド側が既にこちらより新しいなら、絶対に上書きしない
+        // （古いデータに新しいタイムスタンプが付いて送られてくるような不具合があっても、これで守られる）
+        if(existing && existing.updatedAt && existing.updatedAt > myUpdatedAt){
+          return;
+        }
+        tx.set(docRef, { data: JSON.stringify(state), updatedAt: myUpdatedAt });
       });
       return true;
     }catch(e){ return false; }
@@ -3119,7 +3131,9 @@
   });
 
   document.getElementById('reloadBtn').addEventListener('click', ()=>{
-    location.reload();
+    const url = new URL(location.href.split('#')[0].split('?')[0]);
+    url.searchParams.set('_r', Date.now());
+    location.href = url.toString();
   });
 
   document.getElementById('changeJobBtn').addEventListener('click', ()=>{
