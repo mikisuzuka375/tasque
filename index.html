@@ -2371,6 +2371,14 @@
     if(syncUnsub){ syncUnsub(); syncUnsub = null; }
   }
 
+  // クラウド同期は任意ではなく既定で有効にする。まだコードを持っていない端末には自動で発行する。
+  async function ensureCloudSync(){
+    if(state.syncCode || !db) return;
+    state.syncCode = genGuildCode() + genGuildCode();
+    await saveState();
+    subscribePersonalSync(state.syncCode);
+  }
+
   let pendingLinkCode = null;
 
   function renderSyncPanel(){
@@ -2388,28 +2396,20 @@
         </div>`;
       return;
     }
-    if(state.syncCode){
-      body.innerHTML = `
-        <p class="bulk-hint">この端末は同期コードと連携済み。他の端末で同じコードを入力すれば、続きから始められる。</p>
-        <div class="stat-grid" style="margin-top:10px;">
-          <div>同期コード<b style="font-family:var(--font-mono); font-size:16px;">${escapeHtml(state.syncCode)}</b></div>
-        </div>
-        <div style="display:flex; gap:8px; margin-top:14px;">
-          <button data-sync-action="sync-now" style="width:auto;">今すぐ同期</button>
-          <button class="secondary" data-sync-action="unlink" style="width:auto;">連携を解除</button>
-        </div>
-        <div id="syncStatus" class="bulk-hint" style="margin-top:8px;"></div>`;
-    } else {
-      body.innerHTML = `
-        <p class="bulk-hint">同期コードを発行すると、他の端末で同じコードを入力するだけで、この進行を引き継げる。</p>
-        <button data-sync-action="generate" style="margin-top:10px;">新しい同期コードを発行する</button>
-        <div class="bulk-hint" style="margin:14px 0 6px;">すでにコードを持っている場合：</div>
-        <div class="add-form">
-          <input type="text" id="syncCodeInput" placeholder="同期コード" style="text-transform:uppercase;">
-          <button data-sync-action="link" style="width:auto;">このコードで復元</button>
-        </div>
-        <div id="syncStatus" class="bulk-hint" style="margin-top:8px;"></div>`;
-    }
+    body.innerHTML = `
+      <p class="bulk-hint">この進行は自動的にクラウドにも保存されている。他の端末でこのコードを入力すれば、同じ進行を共有できる。</p>
+      <div class="stat-grid" style="margin-top:10px;">
+        <div>この端末のコード<b style="font-family:var(--font-mono); font-size:16px;">${escapeHtml(state.syncCode||'')}</b></div>
+      </div>
+      <div style="display:flex; gap:8px; margin-top:14px;">
+        <button data-sync-action="sync-now" style="width:auto;">今すぐ同期</button>
+      </div>
+      <div class="bulk-hint" style="margin:16px 0 6px;">別の端末のコードに合わせたい場合（この端末の今の進行は上書きされる）：</div>
+      <div class="add-form">
+        <input type="text" id="syncCodeInput" placeholder="同期コード" style="text-transform:uppercase;">
+        <button data-sync-action="link" style="width:auto;">このコードで復元</button>
+      </div>
+      <div id="syncStatus" class="bulk-hint" style="margin-top:8px;"></div>`;
   }
 
   function showGuildJoinError(msg){
@@ -2737,14 +2737,6 @@
     const action = btn.dataset.syncAction;
     const setStatus = (msg)=>{ const el = document.getElementById('syncStatus'); if(el) el.textContent = msg; };
 
-    if(action === 'generate'){
-      if(!db){ setStatus('通信の準備ができていない。少し待って再試行してほしい。'); return; }
-      state.syncCode = genGuildCode() + genGuildCode();
-      await pushStateToCloud();
-      saveState();
-      subscribePersonalSync(state.syncCode);
-      renderSyncPanel();
-    }
     if(action === 'link'){
       if(!db){ setStatus('通信の準備ができていない。少し待って再試行してほしい。'); return; }
       const codeEl = document.getElementById('syncCodeInput');
@@ -2776,12 +2768,6 @@
     if(action === 'sync-now'){
       const ok = await pushStateToCloud();
       setStatus(ok ? ('同期しました（'+new Date().toLocaleTimeString()+'）') : '同期に失敗した。通信状況を確認してほしい。');
-    }
-    if(action === 'unlink'){
-      unsubscribePersonalSync();
-      state.syncCode = null;
-      saveState();
-      renderSyncPanel();
     }
   });
 
@@ -3167,6 +3153,9 @@
     }
     if(state.syncCode){
       subscribePersonalSync(state.syncCode);
+    } else {
+      await ensureCloudSync();
+      render();
     }
     timerInterval = setInterval(tickTimers, 1000);
   }
