@@ -1117,59 +1117,122 @@
   function sfxClick(){ playTone(600,0.05,'square',0,0.05); }
 
   // --- エリアごとの環境音（自前合成のドローン。曲というよりムード音） ---
-  const AREA_BGM = {
-    '始まりの森':   {freq:220, type:'sine',     detune:4},
-    '蒼き洞窟':     {freq:130, type:'sine',     detune:6},
-    '陽炎の砂漠':   {freq:246, type:'triangle', detune:3},
-    '灼熱の峡谷':   {freq:110, type:'sawtooth', detune:8},
-    '大河の渡し':   {freq:196, type:'sine',     detune:3},
-    '凍える尾根':   {freq:262, type:'sine',     detune:2},
-    '龍の帰所':     {freq:98,  type:'sawtooth', detune:10}
+  // エリアごとの簡易な作曲データ（8分音符刻み・8ステップのループ）。null は休符。
+  // bass：低音のベースライン／melody：その上で鳴る旋律
+  const AREA_MUSIC = {
+    '始まりの森': {
+      bpm: 84,
+      bass:   [130.81, null, 196.00, null, 130.81, null, 196.00, null],
+      melody: [329.63, 392.00, 523.25, 392.00, 329.63, 293.66, 261.63, null]
+    },
+    '蒼き洞窟': {
+      bpm: 64,
+      bass:   [130.81, null, null, 155.56, null, null, 196.00, null],
+      melody: [392.00, null, 311.13, null, 261.63, null, null, null]
+    },
+    '陽炎の砂漠': {
+      bpm: 92,
+      bass:   [146.83, null, 220.00, null, 146.83, null, 196.00, null],
+      melody: [293.66, null, 349.23, 392.00, null, 349.23, 293.66, null]
+    },
+    '灼熱の峡谷': {
+      bpm: 100,
+      bass:   [110.00, 110.00, null, 130.81, 110.00, 110.00, null, 98.00],
+      melody: [220.00, null, 246.94, null, 220.00, null, 196.00, null]
+    },
+    '大河の渡し': {
+      bpm: 72,
+      bass:   [98.00, null, 146.83, null, 130.81, null, 146.83, null],
+      melody: [392.00, 440.00, null, 392.00, 349.23, null, 329.63, null]
+    },
+    '凍える尾根': {
+      bpm: 58,
+      bass:   [130.81, null, null, null, 174.61, null, null, null],
+      melody: [523.25, null, 466.16, null, 523.25, null, 392.00, null]
+    },
+    '龍の帰所': {
+      bpm: 52,
+      bass:   [98.00, null, null, 92.50, null, null, 98.00, null],
+      melody: [185.00, null, 207.65, null, 196.00, null, 174.61, null]
+    }
   };
-  let bgmNodes = null;
+
+  const BGM_LOOKAHEAD = 0.12;
+  const BGM_SCHEDULE_INTERVAL = 60;
+  let bgmMasterGain = null;
+  let bgmScheduler = null;
+  let bgmCurrentPattern = null;
+  let bgmNextNoteTime = 0;
+  let bgmCurrentStep = 0;
+
+  function bgmScheduleNote(freq, time, duration, type, peakGain, pluck){
+    const ctx = getAudioCtx();
+    if(!ctx || !bgmMasterGain) return;
+    const osc = ctx.createOscillator();
+    const g = ctx.createGain();
+    osc.type = type;
+    osc.frequency.value = freq;
+    osc.connect(g);
+    g.connect(bgmMasterGain);
+    g.gain.setValueAtTime(0, time);
+    if(pluck){
+      g.gain.linearRampToValueAtTime(peakGain, time + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001, time + duration);
+    } else {
+      g.gain.linearRampToValueAtTime(peakGain, time + 0.06);
+      g.gain.setValueAtTime(peakGain, Math.max(time + 0.06, time + duration - 0.08));
+      g.gain.linearRampToValueAtTime(0.0001, time + duration);
+    }
+    osc.start(time);
+    osc.stop(time + duration + 0.05);
+  }
+
+  function bgmScheduleStep(){
+    if(!bgmCurrentPattern || !bgmMasterGain) return;
+    const ctx = getAudioCtx();
+    if(!ctx) return;
+    const secPerBeat = 60 / bgmCurrentPattern.bpm;
+    const stepDur = secPerBeat / 2;
+    while(bgmNextNoteTime < ctx.currentTime + BGM_LOOKAHEAD){
+      const bassFreq = bgmCurrentPattern.bass[bgmCurrentStep % bgmCurrentPattern.bass.length];
+      const melFreq = bgmCurrentPattern.melody[bgmCurrentStep % bgmCurrentPattern.melody.length];
+      if(bassFreq) bgmScheduleNote(bassFreq, bgmNextNoteTime, stepDur*1.8, 'sine', 0.05, false);
+      if(melFreq) bgmScheduleNote(melFreq, bgmNextNoteTime, stepDur*0.9, 'triangle', 0.045, true);
+      bgmCurrentStep++;
+      bgmNextNoteTime += stepDur;
+    }
+  }
 
   function ensureBgmStarted(){
     if(!state || !state.bgmOn) return;
     const ctx = getAudioCtx();
-    if(!ctx || bgmNodes) return;
-    const gainMain = ctx.createGain();
-    gainMain.gain.value = 0;
-    gainMain.connect(ctx.destination);
-    const osc1 = ctx.createOscillator();
-    const osc2 = ctx.createOscillator();
-    osc1.frequency.value = 220;
-    osc2.frequency.value = 220;
-    osc2.detune.value = 5;
-    osc1.connect(gainMain);
-    osc2.connect(gainMain);
-    try{ osc1.start(); osc2.start(); }catch(e){ return; }
-    gainMain.gain.linearRampToValueAtTime(0.035, ctx.currentTime + 1.5);
-    bgmNodes = {osc1, osc2, gainMain};
+    if(!ctx || bgmScheduler) return;
+    bgmMasterGain = ctx.createGain();
+    bgmMasterGain.gain.value = 0;
+    bgmMasterGain.connect(ctx.destination);
+    bgmMasterGain.gain.linearRampToValueAtTime(0.9, ctx.currentTime + 1.5);
+    bgmNextNoteTime = ctx.currentTime + 0.1;
+    bgmCurrentStep = 0;
     applyBgmForArea(state.level);
+    bgmScheduler = setInterval(bgmScheduleStep, BGM_SCHEDULE_INTERVAL);
   }
 
   function applyBgmForArea(level){
-    if(!bgmNodes) return;
-    const ctx = getAudioCtx();
-    if(!ctx) return;
-    const profile = AREA_BGM[areaBaseName(getArea(level).name)] || AREA_BGM['始まりの森'];
-    const now = ctx.currentTime;
-    bgmNodes.osc1.type = profile.type;
-    bgmNodes.osc2.type = profile.type;
-    bgmNodes.osc1.frequency.linearRampToValueAtTime(profile.freq, now + 2);
-    bgmNodes.osc2.frequency.linearRampToValueAtTime(profile.freq, now + 2);
-    bgmNodes.osc2.detune.setValueAtTime(profile.detune, now);
+    const areaName = areaBaseName(getArea(level).name);
+    bgmCurrentPattern = AREA_MUSIC[areaName] || AREA_MUSIC['始まりの森'];
   }
 
   function stopBgm(){
-    if(!bgmNodes) return;
-    const ctx = getAudioCtx();
-    const nodes = bgmNodes;
-    bgmNodes = null;
-    if(!ctx){ return; }
-    const now = ctx.currentTime;
-    nodes.gainMain.gain.linearRampToValueAtTime(0, now + 1);
-    setTimeout(()=>{ try{ nodes.osc1.stop(); nodes.osc2.stop(); }catch(e){} }, 1200);
+    if(bgmScheduler){ clearInterval(bgmScheduler); bgmScheduler = null; }
+    if(bgmMasterGain){
+      const ctx = getAudioCtx();
+      const gainNode = bgmMasterGain;
+      bgmMasterGain = null;
+      if(ctx){
+        const now = ctx.currentTime;
+        gainNode.gain.linearRampToValueAtTime(0, now + 0.4);
+      }
+    }
   }
 
   const STORY_DEEP = [
