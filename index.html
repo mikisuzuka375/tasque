@@ -552,6 +552,7 @@
     <button class="menu-trigger secondary" data-modal="difficultyModal">難易度</button>
     <button class="menu-trigger secondary" data-modal="reportModal">📊 レポート</button>
     <button class="menu-trigger secondary" id="soundToggleBtn" style="width:auto;">🔊</button>
+    <button class="menu-trigger secondary" id="bgmToggleBtn" style="width:auto;">🎵</button>
     <button class="menu-trigger secondary" id="reloadBtn" style="width:auto;">🔄 更新</button>
     <button class="menu-trigger secondary" data-modal="syncModal">☁️ 同期</button>
     <button class="menu-trigger secondary" data-modal="historyModal">📜 履歴</button>
@@ -615,6 +616,7 @@
 
   <div class="modal-panel" id="skillsModal">
     <div class="modal-panel-head"><span>スキル</span><button class="modal-close" data-close>✕</button></div>
+    <div id="jobLevelInfo" class="bulk-hint" style="margin-bottom:12px;"></div>
     <div class="skills-grid" id="skillsGrid"></div>
   </div>
 
@@ -766,33 +768,113 @@
   let guildUnsub = null;
   let pendingGuildTaskDeleteId = null;
 
+  const MAX_JOB_LEVEL = 15;
+  function jobXpToNext(level){ return Math.round(40 * Math.pow(level, 1.15)); }
+
   const SKILLS = [
-    {id:'heal', name:'ヒール', icon:'✚', reqLevel:2, mpCost:8, kind:'heal', desc:'HPをやや回復する'},
-    {id:'firebolt', name:'ファイアボルト', icon:'🔥', reqLevel:4, mpCost:10, kind:'attack', desc:'敵に追加ダメージを与える'},
-    {id:'greaterheal', name:'エクストラヒール', icon:'✨', reqLevel:8, mpCost:18, kind:'heal', desc:'HPを全回復する'},
-    {id:'meteor', name:'メテオ', icon:'☄️', reqLevel:14, mpCost:22, kind:'attack', desc:'敵に大ダメージを与える'}
+    // 剣士
+    {id:'slash', jobId:'swordsman', name:'斬撃', icon:'⚔️', reqJobLevel:1, mpCost:6, kind:'attack', power:1.3, desc:'素早い斬撃で敵を斬る'},
+    {id:'helmsplit', jobId:'swordsman', name:'兜割り', icon:'🪓', reqJobLevel:5, mpCost:10, kind:'attack', power:1.8, desc:'兜ごと叩き割る一撃'},
+    {id:'bladedance', jobId:'swordsman', name:'剛剣乱舞', icon:'🌀', reqJobLevel:10, mpCost:16, kind:'attack', power:2.5, desc:'連続斬撃で敵を切り刻む'},
+    {id:'purgeflash', jobId:'swordsman', name:'破邪の一閃', icon:'✨', reqJobLevel:15, mpCost:24, kind:'attack', power:3.2, desc:'邪を払う渾身の一閃'},
+    // 魔導士
+    {id:'firebolt', jobId:'sage', name:'ファイアボルト', icon:'🔥', reqJobLevel:1, mpCost:8, kind:'attack', power:1.6, desc:'炎の矢を放つ'},
+    {id:'iceneedle', jobId:'sage', name:'アイスニードル', icon:'❄️', reqJobLevel:5, mpCost:12, kind:'attack', power:2.0, desc:'氷の針で貫く'},
+    {id:'thunderstorm', jobId:'sage', name:'サンダーストーム', icon:'⚡', reqJobLevel:10, mpCost:18, kind:'attack', power:2.6, desc:'雷雲を呼び寄せる'},
+    {id:'meteor', jobId:'sage', name:'メテオ', icon:'☄️', reqJobLevel:15, mpCost:26, kind:'attack', power:3.4, desc:'天より隕石を落とす'},
+    // 密偵
+    {id:'keenstrike', jobId:'scout', name:'鋭き一撃', icon:'🗡️', reqJobLevel:1, mpCost:6, kind:'attack', power:1.5, desc:'急所を狙う一撃'},
+    {id:'shadowstrike', jobId:'scout', name:'隠れ身の一撃', icon:'🌑', reqJobLevel:5, mpCost:10, kind:'attack', power:2.0, desc:'死角からの一撃'},
+    {id:'flurrykick', jobId:'scout', name:'百裂脚', icon:'💨', reqJobLevel:10, mpCost:16, kind:'attack', power:2.3, desc:'目にも止まらぬ連撃'},
+    {id:'assassinart', jobId:'scout', name:'暗殺の極意', icon:'🎯', reqJobLevel:15, mpCost:22, kind:'attack', power:3.0, desc:'一撃必殺の極意'},
+    // 聖騎士
+    {id:'heal_pal', jobId:'paladin', name:'ヒール', icon:'✚', reqJobLevel:1, mpCost:8, kind:'heal', power:0.35, desc:'HPをやや回復する'},
+    {id:'shieldbash', jobId:'paladin', name:'シールドバッシュ', icon:'🛡️', reqJobLevel:5, mpCost:10, kind:'attack', power:1.8, desc:'盾で殴りつける'},
+    {id:'greaterheal_pal', jobId:'paladin', name:'エクストラヒール', icon:'✨', reqJobLevel:10, mpCost:18, kind:'healfull', desc:'HPを全回復する'},
+    {id:'guardprayer', jobId:'paladin', name:'守護の祈り', icon:'🙏', reqJobLevel:15, mpCost:24, kind:'healfull', desc:'祈りと共に力が満ちる（全回復）'},
+    // 僧侶
+    {id:'heal_healer', jobId:'healer', name:'ヒール', icon:'✚', reqJobLevel:1, mpCost:8, kind:'heal', power:0.35, desc:'HPをやや回復する'},
+    {id:'cure', jobId:'healer', name:'キュア', icon:'💧', reqJobLevel:5, mpCost:12, kind:'heal', power:0.55, desc:'清浄な水の癒やし'},
+    {id:'greaterheal_healer', jobId:'healer', name:'エクストラヒール', icon:'✨', reqJobLevel:10, mpCost:18, kind:'healfull', desc:'HPを全回復する'},
+    {id:'blessing', jobId:'healer', name:'女神の祝福', icon:'🕊️', reqJobLevel:15, mpCost:26, kind:'healfullmp', desc:'HP・MPを共に全回復する'},
+    // 守護者
+    {id:'shieldslam', jobId:'guardian', name:'盾撃', icon:'🛡️', reqJobLevel:1, mpCost:6, kind:'attack', power:1.4, desc:'盾を叩きつける'},
+    {id:'ironwall', jobId:'guardian', name:'鉄壁', icon:'🧱', reqJobLevel:5, mpCost:10, kind:'attack', power:1.8, desc:'揺るがぬ構えからの一撃'},
+    {id:'immovable', jobId:'guardian', name:'不動の一撃', icon:'⚒️', reqJobLevel:10, mpCost:16, kind:'attack', power:2.2, desc:'その場から動かぬ重い一撃'},
+    {id:'earthshatter', jobId:'guardian', name:'大地砕き', icon:'🌋', reqJobLevel:15, mpCost:22, kind:'attack', power:2.8, desc:'大地ごと砕く一撃'}
   ];
 
   const JOBS = [
     {id:'swordsman', name:'剣士', icon:'⚔️', tagline:'力こそ全て。真正面から打ち倒す。',
-      desc:'攻撃力+30%／最大HP+15% ・ 最大MP-30%',
+      desc:'攻撃力+30%／最大HP+15% ・ 最大MP-30%（熟練度が上がるほど強く効く）',
       atkMul:1.30, hpMul:1.15, mpMul:0.7},
     {id:'sage', name:'魔導士', icon:'🔮', tagline:'魔を極め、術で戦況を変える。',
-      desc:'スキル威力+40%／最大MP+60% ・ 攻撃力-15%／防御力-30%／最大HP-25%',
+      desc:'スキル威力+40%／最大MP+60% ・ 攻撃力-15%／防御力-30%／最大HP-25%（熟練度が上がるほど強く効く）',
       skillMul:1.4, mpMul:1.6, atkMul:0.85, defMul:0.7, hpMul:0.75},
     {id:'scout', name:'密偵', icon:'🗡️', tagline:'見積もりの妙こそ、我が武器。',
-      desc:'予定内討伐の恩恵+25%／獲得ゴールド+25% ・ 防御力-15%／最大HP-10%',
+      desc:'予定内討伐の恩恵+25%／獲得ゴールド+25% ・ 防御力-15%／最大HP-10%（熟練度が上がるほど強く効く）',
       onTimeMul:1.25, goldMul:1.25, defMul:0.85, hpMul:0.9},
     {id:'paladin', name:'聖騎士', icon:'🛡️', tagline:'守りに長け、崩れず進み続ける。',
-      desc:'防御力+40%／回復効果+20%／最大HP+20% ・ 攻撃力-15%',
+      desc:'防御力+40%／回復効果+20%／最大HP+20% ・ 攻撃力-15%（熟練度が上がるほど強く効く）',
       defMul:1.4, healMul:1.2, hpMul:1.2, atkMul:0.85},
     {id:'healer', name:'僧侶', icon:'✚', tagline:'剣は取らず、癒やしと共に歩む。',
-      desc:'回復効果+60%／最大MP+30% ・ 攻撃力-40%／防御力-20%',
+      desc:'回復効果+60%／最大MP+30% ・ 攻撃力-40%／防御力-20%（熟練度が上がるほど強く効く）',
       healMul:1.6, mpMul:1.3, atkMul:0.6, defMul:0.8},
     {id:'guardian', name:'守護者', icon:'🧱', tagline:'ただ耐える。それこそが役目。',
-      desc:'防御力+60%／最大HP+30% ・ 攻撃力-30%／最大MP-40%／スキル威力-20%',
+      desc:'防御力+60%／最大HP+30% ・ 攻撃力-30%／最大MP-40%／スキル威力-20%（熟練度が上がるほど強く効く）',
       defMul:1.6, hpMul:1.3, atkMul:0.7, mpMul:0.6, skillMul:0.8}
   ];
+
+  function getJobLevel(jobId){
+    if(!jobId) return 0;
+    if(!state.jobLevels) state.jobLevels = {};
+    return state.jobLevels[jobId] || 1;
+  }
+
+  // ジョブの補正倍率は「そのジョブのレベルに応じて、Lv.1のほぼ無補正からLv.MAXのフル補正まで」線形に強くなる
+  function jobStatMultiplier(key, jobId){
+    const job = JOBS.find(j=>j.id===jobId);
+    if(!job || !job[key]) return 1;
+    const level = getJobLevel(jobId);
+    const t = Math.min(1, Math.max(0, (level-1)/(MAX_JOB_LEVEL-1)));
+    return 1 + (job[key]-1)*t;
+  }
+
+  // 素のステータス（キャラクターレベルのみで決まる）× 現在のジョブ・その熟練度、で実際のステータスを組み立て直す。
+  // 一度きりの加算・減算ではなく、毎回この関数で再計算するので、ジョブを何度切り替えてもズレが起きない。
+  function recomputeJobStats(){
+    const hpRatio = state.maxHp > 0 ? state.hp / state.maxHp : 1;
+    const mpRatio = state.maxMp > 0 ? state.mp / state.maxMp : 1;
+    state.atk = Math.max(1, Math.round(state.baseAtk * jobStatMultiplier('atkMul', state.job)));
+    state.def = Math.max(0, Math.round(state.baseDef * jobStatMultiplier('defMul', state.job)));
+    state.maxHp = Math.max(10, Math.round(state.baseMaxHp * jobStatMultiplier('hpMul', state.job)));
+    state.maxMp = Math.max(0, Math.round(state.baseMaxMp * jobStatMultiplier('mpMul', state.job)));
+    state.hp = Math.max(1, Math.min(state.maxHp, Math.round(state.maxHp * hpRatio)));
+    state.mp = Math.max(0, Math.min(state.maxMp, Math.round(state.maxMp * mpRatio)));
+    state.jobOnTimeMul = jobStatMultiplier('onTimeMul', state.job);
+    state.jobGoldMul = jobStatMultiplier('goldMul', state.job);
+    state.jobSkillMul = jobStatMultiplier('skillMul', state.job);
+    state.jobHealMul = jobStatMultiplier('healMul', state.job);
+  }
+
+  // タスク・クエスト・ボスなどで得たXPの一部を、現在のジョブの熟練度としても積む
+  function addJobXp(amount){
+    if(!state.job || amount <= 0) return;
+    if(!state.jobXp) state.jobXp = {};
+    if(!state.jobLevels) state.jobLevels = {};
+    if(state.jobXp[state.job] === undefined) state.jobXp[state.job] = 0;
+    if(state.jobLevels[state.job] === undefined) state.jobLevels[state.job] = 1;
+    state.jobXp[state.job] += amount;
+    let leveled = false;
+    while(state.jobLevels[state.job] < MAX_JOB_LEVEL && state.jobXp[state.job] >= jobXpToNext(state.jobLevels[state.job])){
+      state.jobXp[state.job] -= jobXpToNext(state.jobLevels[state.job]);
+      state.jobLevels[state.job]++;
+      leveled = true;
+      const job = JOBS.find(j=>j.id===state.job);
+      addLog(`<span class="lv">${job.icon} ${job.name}の熟練度が上がった！ Lv.${state.jobLevels[state.job]}</span>`);
+    }
+    if(leveled) recomputeJobStats();
+  }
 
   const AREAS = [
     {min:1, max:3, name:'始まりの森', desc:'そよ風の吹く、冒険の始まりの地。',
@@ -860,6 +942,7 @@
     root.setProperty('--arcane-dim', base.arcaneDim);
     root.setProperty('--gold', base.gold);
     root.setProperty('--good', base.good);
+    applyBgmForArea(level);
   }
 
   // --- 戦闘ビジュアル（自機・敵のSVGイラストとエモート） ---
@@ -1033,6 +1116,62 @@
   function sfxFall(){ playTone(220,0.3,'sawtooth',0,0.12); playTone(140,0.35,'sawtooth',0.12,0.1); }
   function sfxClick(){ playTone(600,0.05,'square',0,0.05); }
 
+  // --- エリアごとの環境音（自前合成のドローン。曲というよりムード音） ---
+  const AREA_BGM = {
+    '始まりの森':   {freq:220, type:'sine',     detune:4},
+    '蒼き洞窟':     {freq:130, type:'sine',     detune:6},
+    '陽炎の砂漠':   {freq:246, type:'triangle', detune:3},
+    '灼熱の峡谷':   {freq:110, type:'sawtooth', detune:8},
+    '大河の渡し':   {freq:196, type:'sine',     detune:3},
+    '凍える尾根':   {freq:262, type:'sine',     detune:2},
+    '龍の帰所':     {freq:98,  type:'sawtooth', detune:10}
+  };
+  let bgmNodes = null;
+
+  function ensureBgmStarted(){
+    if(!state || !state.bgmOn) return;
+    const ctx = getAudioCtx();
+    if(!ctx || bgmNodes) return;
+    const gainMain = ctx.createGain();
+    gainMain.gain.value = 0;
+    gainMain.connect(ctx.destination);
+    const osc1 = ctx.createOscillator();
+    const osc2 = ctx.createOscillator();
+    osc1.frequency.value = 220;
+    osc2.frequency.value = 220;
+    osc2.detune.value = 5;
+    osc1.connect(gainMain);
+    osc2.connect(gainMain);
+    try{ osc1.start(); osc2.start(); }catch(e){ return; }
+    gainMain.gain.linearRampToValueAtTime(0.035, ctx.currentTime + 1.5);
+    bgmNodes = {osc1, osc2, gainMain};
+    applyBgmForArea(state.level);
+  }
+
+  function applyBgmForArea(level){
+    if(!bgmNodes) return;
+    const ctx = getAudioCtx();
+    if(!ctx) return;
+    const profile = AREA_BGM[areaBaseName(getArea(level).name)] || AREA_BGM['始まりの森'];
+    const now = ctx.currentTime;
+    bgmNodes.osc1.type = profile.type;
+    bgmNodes.osc2.type = profile.type;
+    bgmNodes.osc1.frequency.linearRampToValueAtTime(profile.freq, now + 2);
+    bgmNodes.osc2.frequency.linearRampToValueAtTime(profile.freq, now + 2);
+    bgmNodes.osc2.detune.setValueAtTime(profile.detune, now);
+  }
+
+  function stopBgm(){
+    if(!bgmNodes) return;
+    const ctx = getAudioCtx();
+    const nodes = bgmNodes;
+    bgmNodes = null;
+    if(!ctx){ return; }
+    const now = ctx.currentTime;
+    nodes.gainMain.gain.linearRampToValueAtTime(0, now + 1);
+    setTimeout(()=>{ try{ nodes.osc1.stop(); nodes.osc2.stop(); }catch(e){} }, 1200);
+  }
+
   const STORY_DEEP = [
     '第一層で見た竜は、まだ序の口だったと知る。',
     '空気が薄くなるほど、気配は濃くなっていく。',
@@ -1086,8 +1225,9 @@
     return {
       name:'', job:null, pendingJobChoice:false,
       jobOnTimeMul:1, jobGoldMul:1, jobSkillMul:1, jobHealMul:1,
-      jobStatBonus:{atk:0, maxHp:0, maxMp:0, def:0},
+      jobLevels:{}, jobXp:{},
       level:1, xp:0, hp:30, maxHp:30, mp:20, maxMp:20, atk:5, def:2, gold:0,
+      baseMaxHp:30, baseMaxMp:20, baseAtk:5, baseDef:2,
       tasksCompleted:0, onTimeCompleted:0,
       inventory:{hpPotion:0, mpPotion:0},
       tasks:[],
@@ -1108,6 +1248,7 @@
       guildCode:null, guildDisplayName:'',
       syncCode:null,
       soundOn:true,
+      bgmOn:true,
       totalXpEarned:0, totalGoldEarned:0
     };
   }
@@ -1279,10 +1420,36 @@
     }catch(e){
       state = defaultState();
     }
+
+    // 「素のステータス＋ジョブ熟練度」方式への移行が必要か、デフォルト値で埋める前に判定する
+    const needsBaseStatMigration = (state.baseAtk === undefined) && (state.atk !== undefined);
+    const oldJobStatBonus = state.jobStatBonus;
+    const oldJob = state.job;
+    const oldLevel = state.level;
+
     const d = defaultState();
     Object.keys(d).forEach(k=>{
       if(state[k] === undefined) state[k] = d[k];
     });
+
+    if(needsBaseStatMigration){
+      const bonus = oldJobStatBonus || {atk:0, maxHp:0, maxMp:0, def:0};
+      state.baseAtk = Math.max(1, state.atk - (bonus.atk||0));
+      state.baseDef = Math.max(0, state.def - (bonus.def||0));
+      state.baseMaxHp = Math.max(10, state.maxHp - (bonus.maxHp||0));
+      state.baseMaxMp = Math.max(0, state.maxMp - (bonus.maxMp||0));
+      if(oldJob){
+        // すでにジョブを選んでいたプレイヤーが不利にならないよう、キャラクターレベルに応じた
+        // 妥当な熟練度から始める（レベル10なら熟練度5、など。上限はMAX_JOB_LEVEL）
+        if(!state.jobLevels) state.jobLevels = {};
+        if(!state.jobXp) state.jobXp = {};
+        state.jobLevels[oldJob] = Math.min(MAX_JOB_LEVEL, Math.max(1, Math.floor(oldLevel/2)));
+        state.jobXp[oldJob] = 0;
+      }
+      recomputeJobStats();
+      addLog('<span class="area">ジョブの仕組みが新しくなった。役職ごとに熟練度が育っていく方式になった。</span>');
+    }
+
     if(!state.inventory) state.inventory = {hpPotion:0, mpPotion:0};
     state.tasks.forEach(t=>{ if(t.running){ t.running=false; } });
     if(state.enemyHpCurrent == null){
@@ -1395,6 +1562,7 @@
     const dmg = Math.round(state.atk * multiplier);
     const goldGain = Math.round(xpGain/2 * state.jobGoldMul);
     state.xp += xpGain;
+    addJobXp(xpGain);
     state.gold += goldGain;
     state.totalXpEarned = (state.totalXpEarned||0) + xpGain;
     state.totalGoldEarned = (state.totalGoldEarned||0) + goldGain;
@@ -1553,6 +1721,7 @@
       const bonusXp = Math.round(40 * kindMul * state.loopGrowth * diff().rewardMul);
       state.gold += bonusGold;
       state.xp += bonusXp;
+      addJobXp(bonusXp);
       state.totalGoldEarned = (state.totalGoldEarned||0) + bonusGold;
       state.totalXpEarned = (state.totalXpEarned||0) + bonusXp;
       state.bossesDefeated = (state.bossesDefeated||0) + 1;
@@ -1637,18 +1806,12 @@
     state.level = 1;
     state.xp = 0;
     state.bossStage = 0;
-    state.maxHp = Math.round(30*state.loopGrowth);
-    state.maxMp = Math.round(20*state.loopGrowth);
-    state.atk = Math.round(5*state.loopGrowth);
-    state.def = Math.round(2*state.loopGrowth);
+    state.baseMaxHp = Math.round(30*state.loopGrowth);
+    state.baseMaxMp = Math.round(20*state.loopGrowth);
+    state.baseAtk = Math.round(5*state.loopGrowth);
+    state.baseDef = Math.round(2*state.loopGrowth);
 
-    const jobObj = JOBS.find(j=>j.id===state.job);
-    if(jobObj){
-      if(jobObj.atkMul) state.atk = Math.round(state.atk*jobObj.atkMul);
-      if(jobObj.hpMul) state.maxHp = Math.round(state.maxHp*jobObj.hpMul);
-      if(jobObj.mpMul) state.maxMp = Math.round(state.maxMp*jobObj.mpMul);
-      if(jobObj.defMul) state.def = Math.round(state.def*jobObj.defMul);
-    }
+    recomputeJobStats();
     state.hp = state.maxHp;
     state.mp = state.maxMp;
     spawnEncounter(true);
@@ -1661,18 +1824,12 @@
       state.xp -= xpToNext(state.level);
       state.level++;
       state.bossStage = 0;
-      state.maxHp += Math.round(10*state.loopGrowth);
-      state.hp = state.maxHp;
-      state.atk += Math.round(2*state.loopGrowth);
-      state.def += Math.round(1*state.loopGrowth);
-      state.maxMp = maxMpForLevel(state.level);
-      state.mp = state.maxMp;
+      state.baseMaxHp += Math.round(10*state.loopGrowth);
+      state.baseAtk += Math.round(2*state.loopGrowth);
+      state.baseDef += Math.round(1*state.loopGrowth);
+      state.baseMaxMp = maxMpForLevel(state.level);
       leveledUp = true;
       addLog(`<span class="lv">レベルアップ！ ${pname()} はLv.${state.level}になった。攻撃力・防御力・体力が上昇。</span>`);
-      const newSkill = SKILLS.find(s=>s.reqLevel === state.level);
-      if(newSkill){
-        addLog(`<span class="lv">新しい術「${newSkill.icon} ${newSkill.name}」を習得した！</span>`);
-      }
       if(state.level % 5 === 0){
         addLog(MILESTONES[((state.level/5)-1) % MILESTONES.length]);
       }
@@ -1688,6 +1845,9 @@
       addLog(areaAfterObj.story);
     }
     if(leveledUp){
+      recomputeJobStats();
+      state.hp = state.maxHp;
+      state.mp = state.maxMp;
       sfxLevelUp();
       spawnEncounter(true);
     }
@@ -1697,6 +1857,7 @@
     applyAreaTheme(state.level);
     updateFighterSprites();
     document.getElementById('soundToggleBtn').textContent = state.soundOn ? '🔊' : '🔇';
+    document.getElementById('bgmToggleBtn').textContent = state.bgmOn ? '🎵' : '🔇🎵';
     const need = xpToNext(state.level);
     document.getElementById('lvBadge').textContent = 'Lv.' + state.level;
     const loopBadge = document.getElementById('loopBadge');
@@ -1716,7 +1877,7 @@
     document.getElementById('atkStat').textContent = state.atk;
     document.getElementById('defStat').textContent = state.def;
     const jobObj = JOBS.find(j=>j.id===state.job);
-    document.getElementById('jobStat').textContent = jobObj ? jobObj.icon+' '+jobObj.name : '未定';
+    document.getElementById('jobStat').textContent = jobObj ? `${jobObj.icon} ${jobObj.name} Lv.${getJobLevel(state.job)}` : '未定';
     const rate = state.tasksCompleted ? Math.round(state.onTimeCompleted/state.tasksCompleted*100) : 0;
     document.getElementById('rateStat').textContent = state.tasksCompleted ? rate+'%' : '—';
     document.getElementById('comboStat').textContent = state.comboCount > 0 ? state.comboCount : '-';
@@ -1804,8 +1965,26 @@
 
   function renderSkills(){
     const grid = document.getElementById('skillsGrid');
-    grid.innerHTML = SKILLS.map(s=>{
-      const unlocked = state.level >= s.reqLevel;
+    const infoEl = document.getElementById('jobLevelInfo');
+    if(!state.job){
+      if(infoEl) infoEl.textContent = '';
+      grid.innerHTML = '<div class="empty">ジョブを選ぶと、専用のスキルが使えるようになる。</div>';
+      return;
+    }
+    const jobObj = JOBS.find(j=>j.id===state.job);
+    const jobLevel = getJobLevel(state.job);
+    if(infoEl){
+      if(jobLevel >= MAX_JOB_LEVEL){
+        infoEl.textContent = `${jobObj.icon} ${jobObj.name} 熟練度 Lv.${jobLevel}（最大）`;
+      } else {
+        const xp = (state.jobXp && state.jobXp[state.job]) || 0;
+        const need = jobXpToNext(jobLevel);
+        infoEl.textContent = `${jobObj.icon} ${jobObj.name} 熟練度 Lv.${jobLevel}（${xp} / ${need}）`;
+      }
+    }
+    const jobSkills = SKILLS.filter(s=>s.jobId === state.job);
+    grid.innerHTML = jobSkills.map(s=>{
+      const unlocked = jobLevel >= s.reqJobLevel;
       const canAfford = state.mp >= s.mpCost;
       const disabled = !unlocked || !canAfford;
       return `
@@ -1813,7 +1992,7 @@
           <div class="skill-top">
             <span class="skill-name"><span class="skill-icon">${s.icon}</span>${s.name}</span>
           </div>
-          <div class="skill-desc">${unlocked ? s.desc : 'Lv.'+s.reqLevel+' で習得'}</div>
+          <div class="skill-desc">${unlocked ? s.desc : '熟練度Lv.'+s.reqJobLevel+' で習得'}</div>
           ${unlocked ? `
           <div class="skill-cost">MP ${s.mpCost}</div>
           <button class="magic" style="margin-top:8px" data-skill="${s.id}" ${disabled?'disabled':''}>
@@ -1849,16 +2028,8 @@
   }
 
   function respecJob(){
-    const bonus = state.jobStatBonus || {atk:0,maxHp:0,maxMp:0,def:0};
-    state.atk = Math.max(1, state.atk - bonus.atk);
-    state.maxHp = Math.max(10, state.maxHp - bonus.maxHp);
-    state.hp = Math.min(state.hp, state.maxHp);
-    state.maxMp = Math.max(0, state.maxMp - bonus.maxMp);
-    state.mp = Math.min(state.mp, state.maxMp);
-    state.def = Math.max(0, state.def - bonus.def);
-    state.jobStatBonus = {atk:0, maxHp:0, maxMp:0, def:0};
     state.job = null;
-    state.jobOnTimeMul = 1; state.jobGoldMul = 1; state.jobSkillMul = 1; state.jobHealMul = 1;
+    recomputeJobStats();
     state.pendingJobChoice = true;
     addLog(`<span class="lv">${pname()}はこれまでの生き方を捨てた。新たな道を選び直せる。</span>`);
     saveState();
@@ -2131,6 +2302,7 @@
     t.completedAt = Date.now();
     state.tasksCompleted++;
     state.xp += xpGain;
+    addJobXp(xpGain);
     state.gold += goldGain;
     state.totalXpEarned = (state.totalXpEarned||0) + xpGain;
     state.totalGoldEarned = (state.totalGoldEarned||0) + goldGain;
@@ -2253,17 +2425,31 @@
   function useSkill(skillId){
     const s = SKILLS.find(s=>s.id===skillId);
     if(!s) return;
-    if(state.level < s.reqLevel || state.mp < s.mpCost) return;
+    if(s.jobId !== state.job) return;
+    if(getJobLevel(state.job) < s.reqJobLevel || state.mp < s.mpCost) return;
     state.mp -= s.mpCost;
     if(s.kind === 'heal'){
-      const base = skillId==='greaterheal' ? (state.maxHp - state.hp) : Math.round(state.maxHp*0.35);
+      const base = Math.round(state.maxHp * s.power);
       const amount = Math.round(base * state.jobHealMul);
       state.hp = Math.min(state.maxHp, state.hp + amount);
       playHealEmote(amount);
       sfxHeal();
       addLog(`${s.icon} ${s.name} を唱えた。HPが${amount}回復した`);
+    } else if(s.kind === 'healfull'){
+      const amount = state.maxHp - state.hp;
+      state.hp = state.maxHp;
+      playHealEmote(amount);
+      sfxHeal();
+      addLog(`${s.icon} ${s.name} を唱えた。HPが全回復した`);
+    } else if(s.kind === 'healfullmp'){
+      const amountHp = state.maxHp - state.hp;
+      state.hp = state.maxHp;
+      state.mp = state.maxMp;
+      playHealEmote(amountHp);
+      sfxHeal();
+      addLog(`${s.icon} ${s.name} を唱えた。HP・MPが全回復した`);
     } else {
-      const base = skillId==='meteor' ? state.atk*3 : state.atk*1.6;
+      const base = state.atk * s.power;
       const dmg = Math.round(base * state.jobSkillMul);
       const defeated = damageEnemy(dmg, `${s.icon} ${s.name} を放った。`);
       if(defeated){ processLevelUps(); }
@@ -2982,21 +3168,12 @@
     if(state.job) return;
     const job = JOBS.find(j=>j.id===jobId);
     if(!job) return;
-    const hpRatio = state.maxHp > 0 ? state.hp / state.maxHp : 1;
-    const mpRatio = state.maxMp > 0 ? state.mp / state.maxMp : 1;
-    const bonus = {atk:0, maxHp:0, maxMp:0, def:0};
-    if(job.atkMul){ const v = Math.round(state.atk*job.atkMul); bonus.atk = v - state.atk; state.atk = v; }
-    if(job.hpMul){ const v = Math.round(state.maxHp*job.hpMul); bonus.maxHp = v - state.maxHp; state.maxHp = v; }
-    if(job.mpMul){ const v = Math.round(state.maxMp*job.mpMul); bonus.maxMp = v - state.maxMp; state.maxMp = v; }
-    if(job.defMul){ const v = Math.round(state.def*job.defMul); bonus.def = v - state.def; state.def = v; }
-    state.hp = Math.max(1, Math.min(state.maxHp, Math.round(state.maxHp * hpRatio)));
-    state.mp = Math.max(0, Math.min(state.maxMp, Math.round(state.maxMp * mpRatio)));
-    state.jobStatBonus = bonus;
-    state.jobOnTimeMul = job.onTimeMul || 1;
-    state.jobGoldMul = job.goldMul || 1;
-    state.jobSkillMul = job.skillMul || 1;
-    state.jobHealMul = job.healMul || 1;
+    if(!state.jobLevels) state.jobLevels = {};
+    if(!state.jobXp) state.jobXp = {};
+    if(state.jobLevels[jobId] === undefined) state.jobLevels[jobId] = 1;
+    if(state.jobXp[jobId] === undefined) state.jobXp[jobId] = 0;
     state.job = jobId;
+    recomputeJobStats();
     state.pendingJobChoice = false;
     addLog(`<span class="lv">${job.icon} ${pname()} は${job.name}の道を選んだ。「${job.tagline}」</span>`);
     saveState();
@@ -3115,6 +3292,19 @@
     if(state.soundOn) sfxClick();
     saveState();
   });
+
+  document.getElementById('bgmToggleBtn').addEventListener('click', ()=>{
+    state.bgmOn = !state.bgmOn;
+    document.getElementById('bgmToggleBtn').textContent = state.bgmOn ? '🎵' : '🔇🎵';
+    if(state.bgmOn){ ensureBgmStarted(); } else { stopBgm(); }
+    saveState();
+  });
+
+  // 音の自動再生はブラウザの制約で「ユーザーの最初の操作」が必要なため、最初のクリックで起動する
+  document.addEventListener('click', function initBgmOnce(){
+    ensureBgmStarted();
+    document.removeEventListener('click', initBgmOnce);
+  }, {once:true});
 
   document.getElementById('reloadBtn').addEventListener('click', ()=>{
     const url = new URL(location.href.split('#')[0].split('?')[0]);
