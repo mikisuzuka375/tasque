@@ -530,7 +530,7 @@
           <span id="enemyAtkLabel" class="enemy-atk"></span>
         </span>
       </div>
-      <div class="area-name" id="areaName"></div>
+      <div class="area-name" id="areaName" data-modal="mapModal" style="cursor:pointer; text-decoration:underline dotted 1px; text-underline-offset:3px;" title="マップを見る"></div>
       <div class="area-desc" id="areaDesc"></div>
       <div class="enemy-head">
         <svg class="sigil" id="sigil" viewBox="0 0 100 100"></svg>
@@ -546,21 +546,21 @@
 
   <div class="menu-row">
     <button class="menu-trigger" data-modal="taskAddModal">＋ タスクを追加</button>
-    <button class="menu-trigger secondary" data-modal="questModal">🗓️ デイリー/ウィークリー</button>
-    <button class="menu-trigger secondary" data-modal="skillsModal">スキル</button>
-    <button class="menu-trigger secondary" data-modal="shopModal">道具・商店</button>
-    <button class="menu-trigger secondary" data-modal="difficultyModal">難易度</button>
-    <button class="menu-trigger secondary" data-modal="reportModal">📊 レポート</button>
+    <button class="menu-trigger secondary" data-modal="questModal" data-unlock="8">🗓️ デイリー/ウィークリー</button>
+    <button class="menu-trigger secondary" data-modal="skillsModal" data-unlock="3">スキル</button>
+    <button class="menu-trigger secondary" data-modal="shopModal" data-unlock="10">道具・商店</button>
+    <button class="menu-trigger secondary" data-modal="difficultyModal" data-unlock="10">難易度</button>
+    <button class="menu-trigger secondary" data-modal="reportModal" data-unlock="10">📊 レポート</button>
     <button class="menu-trigger secondary" id="soundToggleBtn" style="width:auto;">🔊</button>
-    <button class="menu-trigger secondary" id="bgmToggleBtn" style="width:auto;">🎵</button>
+    <button class="menu-trigger secondary" id="bgmToggleBtn" style="width:auto;" data-unlock="3">🎵</button>
     <button class="menu-trigger secondary" id="reloadBtn" style="width:auto;">🔄 更新</button>
-    <button class="menu-trigger secondary" data-modal="syncModal">☁️ 同期</button>
-    <button class="menu-trigger secondary" data-modal="historyModal">📜 履歴</button>
-    <button class="menu-trigger secondary" id="changeJobBtn" style="width:auto;">🎭 ジョブ変更</button>
+    <button class="menu-trigger secondary" data-modal="syncModal" data-unlock="15">☁️ 同期</button>
+    <button class="menu-trigger secondary" data-modal="historyModal" data-unlock="10">📜 履歴</button>
+    <button class="menu-trigger secondary" id="changeJobBtn" style="width:auto;" data-unlock="3">🎭 ジョブ変更</button>
     <button class="menu-trigger secondary" data-modal="resetModal" style="color:var(--blood);">⚠️ 初期化</button>
   </div>
 
-  <div class="filter-row">
+  <div class="filter-row" data-unlock="5">
     <span class="bulk-hint">ジャンルで絞り込み：</span>
     <select id="genreFilter"><option value="">すべて</option></select>
     <span class="bulk-hint">並び替え：</span>
@@ -583,21 +583,12 @@
     <div class="modal-panel-head"><span>タスクを追加</span><button class="modal-close" data-close>✕</button></div>
     <div class="add-form">
       <input type="text" id="taskInput" placeholder="タスク名（例：資料作成）">
-      <input type="number" id="estInput" placeholder="想定分" min="0">
+      <input type="number" id="estInput" placeholder="想定分（省略可）" min="0">
       <input type="date" id="dateInput">
       <select id="genreInput"><option value="">ジャンルなし</option></select>
-      <label style="display:flex; align-items:center; gap:5px; font-size:12.5px; color:var(--ink-dim);">
-        <input type="checkbox" id="strictInput" checked style="width:auto; padding:0;">工数遵守
-      </label>
-      <select id="recurrenceInput" style="width:auto;">
-        <option value="">繰り返しなし</option>
-        <option value="daily">🔁毎日</option>
-        <option value="weekly">🔁毎週</option>
-      </select>
       <button id="addBtn" style="width:auto">追加</button>
     </div>
-    <div class="bulk-hint" style="margin:-6px 0 10px;">工数遵守：オンだと予定超過で威力が落ち、超えるほど弱くなる。オフだと逆に、時間をかけるほど威力が上がる（じっくり型）。想定分を入れなかったタスクは、この設定に関わらず常にじっくり型になる</div>
-    <div class="bulk-hint" style="margin:-6px 0 10px;">繰り返し：完了した翌日／翌週になると、自動でまた挑戦可能に戻る</div>
+    <div class="bulk-hint" style="margin:-6px 0 10px;">想定分を入れると予定内ほど強く、入れないと時間をかけるほど強くなる</div>
     <div class="bulk-add">
       <textarea id="bulkInput" placeholder="1行に1つ。末尾に分数を書くと想定時間になります&#10;例：&#10;資料作成 30&#10;議事録送付&#10;見積り確認 15"></textarea>
       <div class="bulk-add-row">
@@ -658,6 +649,11 @@
     <div id="syncBody"></div>
   </div>
 
+  <div class="modal-panel" id="mapModal" style="max-width:640px;">
+    <div class="modal-panel-head"><span>ワールドマップ</span><button class="modal-close" data-close>✕</button></div>
+    <div id="mapBody"></div>
+  </div>
+
   <div class="modal-panel" id="historyModal" style="max-width:560px;">
     <div class="modal-panel-head"><span>履歴（直近10件）</span><button class="modal-close" data-close>✕</button></div>
     <div style="display:flex; gap:8px; margin-bottom:14px;">
@@ -680,8 +676,8 @@
     </div>
   </div>
 
-  <div class="section-title">ギルドクエスト</div>
-  <div id="guildJoinSection">
+  <div class="section-title" data-unlock="15">ギルドクエスト</div>
+  <div id="guildJoinSection" data-unlock="15">
     <p class="bulk-hint" style="margin-bottom:10px;">個人の遠征とは別に、チームで1体のギルドボスを討伐したり、タスクを担当者付きで共有できる。</p>
     <div class="add-form">
       <input type="text" id="guildDisplayName" placeholder="ギルド内での表示名">
@@ -1348,6 +1344,37 @@
       </span>`).join('') : '<span class="bulk-hint">まだジャンルがない。</span>';
   }
 
+  function renderMap(){
+    const body = document.getElementById('mapBody');
+    if(!body) return;
+    const currentArea = getArea(state.level);
+    const W = 600, H = 170;
+    const areas = AREAS.filter(a=>a.name !== '龍の帰所').concat([AREAS[AREAS.length-1]]);
+    const n = areas.length;
+    const padX = 36, stepX = (W - padX*2) / (n - 1);
+    const cy = 90;
+    const AREA_ICONS = ['🌲','🌑','🏜️','🌋','🌊','❄️','🐉'];
+    let svg = `<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:${W}px;display:block;margin:0 auto;">`;
+    svg += `<line x1="${padX}" y1="${cy}" x2="${W-padX}" y2="${cy}" stroke="var(--border)" stroke-width="2"/>`;
+    areas.forEach((a, i)=>{
+      const x = padX + i * stepX;
+      const isCurrent = a.name === currentArea.name;
+      const isPast = a.max < state.level || (a === currentArea);
+      const color = isCurrent ? 'var(--fire)' : isPast ? 'var(--good)' : 'var(--ink-dim)';
+      const r = isCurrent ? 16 : 12;
+      svg += `<circle cx="${x}" cy="${cy}" r="${r}" fill="${isCurrent?'var(--fire)':isPast?'var(--arcane-dim)':'var(--surface-2)'}" stroke="${color}" stroke-width="${isCurrent?3:1.5}"/>`;
+      svg += `<text x="${x}" y="${cy+5}" text-anchor="middle" font-size="14" fill="${color}">${AREA_ICONS[i]||'●'}</text>`;
+      if(isCurrent) svg += `<text x="${x}" y="${cy-24}" text-anchor="middle" font-size="9" fill="var(--fire)" font-weight="600">ここ</text>`;
+      const labelY = i%2===0 ? cy+36 : cy+50;
+      svg += `<text x="${x}" y="${labelY}" text-anchor="middle" font-size="9" fill="${color}">${a.name.replace('の','\nの')}</text>`;
+      const lvLabel = a.max>=9999 ? `Lv.${a.min}+` : a.min===a.max ? `Lv.${a.min}` : `Lv.${a.min}-${a.max}`;
+      const lvY = i%2===0 ? cy-36 : cy-48;
+      svg += `<text x="${x}" y="${lvY}" text-anchor="middle" font-size="8" fill="${isCurrent?'var(--fire)':'var(--ink-dim)'}">${lvLabel}</text>`;
+    });
+    svg += '</svg>';
+    body.innerHTML = svg + `<p style="font-size:13px;color:var(--ink-dim);margin-top:12px;text-align:center;">現在地：<b style="color:var(--fire)">${currentArea.name}</b>（Lv.${state.level}）</p><p style="font-size:12px;color:var(--ink-dim);text-align:center;margin-top:4px;">${currentArea.desc}</p>`;
+  }
+
   function renderHistoryPanel(){
     const tabC = document.getElementById('historyTabCompleted');
     const tabD = document.getElementById('historyTabDeleted');
@@ -1893,6 +1920,7 @@
       state.baseMaxMp = maxMpForLevel(state.level);
       leveledUp = true;
       addLog(`<span class="lv">レベルアップ！ ${pname()} はLv.${state.level}になった。攻撃力・防御力・体力が上昇。</span>`);
+      if(UNLOCK_MESSAGES[state.level]){ addLog(`<span class="area">${UNLOCK_MESSAGES[state.level]}</span>`); }
       if(state.level % 5 === 0){
         addLog(MILESTONES[((state.level/5)-1) % MILESTONES.length]);
       }
@@ -1916,9 +1944,26 @@
     }
   }
 
+  const UNLOCK_MESSAGES = {
+    3:  '◆ ジョブ選択・スキル・BGMが解放された。',
+    5:  '◆ ジャンル絞り込み・並び替えが解放された。',
+    8:  '◆ デイリー/ウィークリークエストが解放された。',
+    10: '◆ レポート・商店・難易度・履歴が解放された。',
+    15: '◆ 同期・ギルド機能が解放された。'
+  };
+  let lastUnlockLevel = 0;
+  function updateFeatureVisibility(){
+    const lv = state.level;
+    document.querySelectorAll('[data-unlock]').forEach(el=>{
+      const need = parseInt(el.dataset.unlock, 10);
+      el.style.display = lv >= need ? '' : 'none';
+    });
+  }
+
   function render(){
     applyAreaTheme(state.level);
     updateFighterSprites();
+    updateFeatureVisibility();
     document.getElementById('soundToggleBtn').textContent = state.soundOn ? '🔊' : '🔇';
     document.getElementById('bgmToggleBtn').textContent = state.bgmOn ? '🎵' : '🔇🎵';
     const need = xpToNext(state.level);
@@ -2183,14 +2228,6 @@
                 <option value="">ジャンルなし</option>
                 ${Array.from(new Set([...getAllGenres(), t.genre].filter(Boolean))).map(g=>`<option value="${escapeHtml(g)}" ${t.genre===g?'selected':''}>${escapeHtml(g)}</option>`).join('')}
               </select>
-              <label style="display:flex; align-items:center; gap:5px; font-size:12.5px; color:var(--ink-dim);">
-                <input type="checkbox" data-edit="strict" ${t.strictMode!==false?'checked':''} style="width:auto; padding:0;">工数遵守
-              </label>
-              <select data-edit="recurrence" style="width:auto;">
-                <option value="" ${!t.recurrence?'selected':''}>繰り返しなし</option>
-                <option value="daily" ${t.recurrence==='daily'?'selected':''}>🔁毎日</option>
-                <option value="weekly" ${t.recurrence==='weekly'?'selected':''}>🔁毎週</option>
-              </select>
             </div>
             <div class="bulk-hint">経過分は計測時間を手動で上書きできます（ストップウォッチは一時停止した状態になります）</div>
             <div style="display:flex; gap:8px;">
@@ -2212,8 +2249,7 @@
       const overdue = !t.completed && isOverdue(t.dueDate);
       const metaParts = [];
       metaParts.push(`<span>${hasEst ? '想定 '+t.estimateMinutes+'分' : '想定時間なし'}</span>`);
-      const useStrictBadge = hasEst && t.strictMode !== false;
-      metaParts.push(`<span class="genre-badge" style="background:${useStrictBadge?'var(--blood-dim)':'var(--arcane-dim)'}">${useStrictBadge?'工数遵守':'じっくり型'}</span>`);
+      metaParts.push(`<span class="genre-badge" style="background:${hasEst?'var(--blood-dim)':'var(--arcane-dim)'}">${hasEst?'厳守型':'じっくり型'}</span>`);
       if(t.dueDate){
         const todayCheck = new Date(); todayCheck.setHours(0,0,0,0);
         const dueCheck = new Date(t.dueDate+'T00:00:00');
@@ -2251,6 +2287,7 @@
           </div>` : `
           <div class="task-controls">
             <span class="timer ${timerClass}" data-timer="${t.id}">${fmtTime(elapsed)}</span>
+            ${!hasEst ? `<input type="number" placeholder="想定分" min="1" data-inline-est="${t.id}" style="width:60px; font-size:12px; padding:3px 5px;" title="想定工数をここで設定">` : ''}
             <button class="secondary" data-action="toggle" data-id="${t.id}">${t.running ? '一時停止' : (t.elapsedSeconds>0?'再開':'開始')}</button>
             <button data-action="complete" data-id="${t.id}">討伐完了</button>
             <button class="secondary" data-action="edit" data-id="${t.id}">編集</button>
@@ -2457,15 +2494,12 @@
     const elapsedMin = row.querySelector('[data-edit="elapsed"]').value;
     const date = row.querySelector('[data-edit="date"]').value;
     const genre = row.querySelector('[data-edit="genre"]').value.trim();
-    const strictChecked = row.querySelector('[data-edit="strict"]').checked;
-    const recurrenceVal = row.querySelector('[data-edit="recurrence"]').value;
     if(name){ t.name = name; }
     t.estimateMinutes = est ? parseInt(est,10) : null;
+    t.strictMode = t.estimateMinutes !== null;
     t.elapsedSeconds = elapsedMin ? Math.max(0, parseFloat(elapsedMin)*60) : 0;
     t.running = false;
     t.startedAt = null;
-    t.strictMode = strictChecked;
-    t.recurrence = recurrenceVal || null;
     t.dueDate = date || null;
     t.genre = genre || '';
     pendingEditId = null;
@@ -2937,13 +2971,11 @@
     const estEl = document.getElementById('estInput');
     const dateEl = document.getElementById('dateInput');
     const genreEl = document.getElementById('genreInput');
-    const strictEl = document.getElementById('strictInput');
-    const recurEl = document.getElementById('recurrenceInput');
     const name = nameEl.value.trim();
     if(!name) return;
     const est = estEl.value ? parseInt(estEl.value,10) : null;
-    addTask(name, est, dateEl.value, genreEl.value.trim(), strictEl.checked, recurEl.value || null);
-    nameEl.value=''; estEl.value=''; dateEl.value=''; genreEl.value=''; strictEl.checked = true; recurEl.value='';
+    addTask(name, est, dateEl.value, genreEl.value.trim(), est !== null, null);
+    nameEl.value=''; estEl.value=''; dateEl.value=''; genreEl.value='';
     saveState();
     renderTasks();
   });
@@ -3157,9 +3189,10 @@
     lines.forEach(line=>{
       const m = line.match(/^(.*?)[\s,、]+(\d+)\s*分?$/);
       if(m && m[1].trim()){
-        addTask(m[1].trim(), parseInt(m[2],10));
+        const est = parseInt(m[2],10);
+        addTask(m[1].trim(), est, '', '仕事', true, null);
       } else {
-        addTask(line, null);
+        addTask(line, null, '', '仕事', false, null);
       }
     });
     area.value = '';
@@ -3167,6 +3200,25 @@
     renderTasks();
   });
 
+  document.getElementById('taskList').addEventListener('keydown', e=>{
+    if((e.isComposing||e.keyCode===229)||e.key!=='Enter') return;
+    const inp = e.target.closest('input[data-inline-est]');
+    if(!inp) return;
+    const id = inp.dataset.inlineEst;
+    const val = parseInt(inp.value,10);
+    if(!val||val<1) return;
+    const t = state.tasks.find(t=>t.id===id);
+    if(t){ t.estimateMinutes=val; t.strictMode=true; saveState(); renderTasks(); }
+  });
+  document.getElementById('taskList').addEventListener('change', e=>{
+    const inp = e.target.closest('input[data-inline-est]');
+    if(!inp) return;
+    const id = inp.dataset.inlineEst;
+    const val = parseInt(inp.value,10);
+    if(!val||val<1) return;
+    const t = state.tasks.find(t=>t.id===id);
+    if(t){ t.estimateMinutes=val; t.strictMode=true; saveState(); renderTasks(); }
+  });
   document.getElementById('taskList').addEventListener('click', e=>{
     const btn = e.target.closest('button[data-action]');
     if(!btn) return;
@@ -3256,7 +3308,7 @@
     for(let i=0;i<3650;i++){
       const dayStart = todayStart.getTime() - i*DAY;
       const dayEnd = dayStart + DAY;
-      const has = state.tasks.some(t=>t.completed && t.completedAt && t.completedAt>=dayStart && t.completedAt<dayEnd);
+      const has = (state.completedHistory||[]).some(t=>t.completedAt && t.completedAt>=dayStart && t.completedAt<dayEnd);
       if(has){ streak++; }
       else if(i===0){ continue; }
       else { break; }
@@ -3273,11 +3325,11 @@
     }
     const dayCounts = days.map(d=>{
       const next = new Date(d); next.setDate(next.getDate()+1);
-      const count = state.tasks.filter(t=>t.completed && t.completedAt && t.completedAt>=d.getTime() && t.completedAt<next.getTime()).length;
+      const count = (state.completedHistory||[]).filter(t=>t.completedAt && t.completedAt>=d.getTime() && t.completedAt<next.getTime()).length;
       return { label: (d.getMonth()+1)+'/'+d.getDate(), count };
     });
     const genreCounts = {};
-    state.tasks.filter(t=>t.completed).forEach(t=>{
+    (state.completedHistory||[]).forEach(t=>{
       const g = t.genre || '未分類';
       genreCounts[g] = (genreCounts[g]||0) + 1;
     });
@@ -3335,12 +3387,15 @@
     if(id === 'questModal') renderQuests();
     if(id === 'syncModal'){ pendingLinkCode = null; renderSyncPanel(); }
     if(id === 'historyModal') renderHistoryPanel();
+    if(id === 'mapModal') renderMap();
     if(id === 'taskAddModal'){ renderGenreManageList(); refreshGenreOptions(); }
   }
   function closeAllModals(){
     document.getElementById('modalBackdrop').classList.remove('show');
     document.querySelectorAll('.modal-panel').forEach(m=>m.classList.remove('show'));
   }
+  document.getElementById('areaName').addEventListener('click', ()=>openModal('mapModal'));
+
   document.querySelectorAll('.menu-trigger[data-modal]').forEach(btn=>{
     btn.addEventListener('click', ()=> openModal(btn.dataset.modal));
   });
