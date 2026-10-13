@@ -551,8 +551,7 @@
     <button class="menu-trigger secondary" data-modal="shopModal" data-unlock="10">道具・商店</button>
     <button class="menu-trigger secondary" data-modal="difficultyModal" data-unlock="10">難易度</button>
     <button class="menu-trigger secondary" data-modal="reportModal" data-unlock="10">📊 レポート</button>
-    <button class="menu-trigger secondary" id="soundToggleBtn" style="width:auto;">🔊</button>
-    <button class="menu-trigger secondary" id="bgmToggleBtn" style="width:auto;" data-unlock="3">🎵</button>
+    <button class="menu-trigger secondary" id="soundToggleBtn" style="width:auto;">🔊🎵</button>
     <button class="menu-trigger secondary" id="reloadBtn" style="width:auto;">🔄 更新</button>
     <button class="menu-trigger secondary" data-modal="syncModal" data-unlock="15">☁️ 同期</button>
     <button class="menu-trigger secondary" data-modal="historyModal" data-unlock="10">📜 履歴</button>
@@ -1344,35 +1343,89 @@
       </span>`).join('') : '<span class="bulk-hint">まだジャンルがない。</span>';
   }
 
+  // エリア座標（MAP_W=560, MAP_H=300 の座標系）
+  const AREA_NODES = [
+    {area:'始まりの森', x:70,  y:210, col:'#3d7a45'},
+    {area:'蒼き洞窟',   x:155, y:145, col:'#2b4f78'},
+    {area:'陽炎の砂漠', x:245, y:195, col:'#b5892a'},
+    {area:'灼熱の峡谷', x:320, y:240, col:'#8b2220'},
+    {area:'大河の渡し', x:395, y:165, col:'#2a6e8c'},
+    {area:'凍える尾根', x:460, y:100, col:'#5598b8'},
+    {area:'龍の帰所',   x:510, y:185, col:'#5e2d7c'}
+  ];
+
+  function drawTree(x, y, sc){ return `<g transform="translate(${x},${y}) scale(${sc})"><polygon points="0,-14 -10,4 10,4" fill="#2d6b35"/><polygon points="0,-22 -7,-2 7,-2" fill="#3a8040"/><rect x="-2" y="4" width="4" height="6" fill="#6b4423"/></g>`; }
+  function drawCave(x, y){ return `<g transform="translate(${x},${y})"><ellipse cx="0" cy="2" rx="12" ry="8" fill="#1c2d45"/><path d="M-12,2 Q-8,-12 0,-10 Q8,-12 12,2 Z" fill="#25395c"/><ellipse cx="0" cy="2" rx="8" ry="5" fill="#0d1620"/></g>`; }
+  function drawDune(x, y){ return `<g transform="translate(${x},${y})"><path d="M-16,6 Q-8,-10 0,-8 Q8,-10 16,6 Z" fill="#c9973f"/><path d="M-10,8 Q-4,-5 2,-4 Q8,-5 14,8 Z" fill="#b07e28" opacity="0.6"/></g>`; }
+  function drawFlame(x, y){ return `<g transform="translate(${x},${y})"><path d="M0,-16 C-8,-10 -10,0 -4,6 Q0,2 4,6 C10,0 8,-10 0,-16Z" fill="#c13b10"/><path d="M0,-10 C-4,-5 -5,2 -2,5 Q0,2 2,5 C5,2 4,-5 0,-10Z" fill="#e87020"/></g>`; }
+  function drawWave(x, y){ return `<g transform="translate(${x},${y})"><path d="M-14,0 Q-10,-8 -5,0 Q0,8 5,0 Q10,-8 14,0" stroke="#3a8aaa" stroke-width="2.5" fill="none"/><path d="M-14,7 Q-10,-1 -5,7 Q0,15 5,7 Q10,-1 14,7" stroke="#2a6e8c" stroke-width="2" fill="none"/></g>`; }
+  function drawMountain(x, y){ return `<g transform="translate(${x},${y})"><polygon points="0,-20 -14,8 14,8" fill="#5598b8"/><polygon points="0,-20 -7,0 7,0" fill="#ddeeff" opacity="0.7"/><polygon points="-6,-4 -14,8 2,8" fill="#4080a0"/></g>`; }
+  function drawDragon(x, y){ return `<g transform="translate(${x},${y})"><ellipse cx="0" cy="2" rx="9" ry="6" fill="#4a1e6a"/><polygon points="-3,-14 0,-4 3,-14" fill="#6b2a99"/><polygon points="-10,-2 -15,6 -4,2" fill="#5e2d7c"/><polygon points="10,-2 15,6 4,2" fill="#5e2d7c"/><circle cx="0" cy="-1" r="4" fill="#5e2d7c"/><circle cx="-1.5" cy="-1.5" r="1.2" fill="#ff6600"/><circle cx="1.5" cy="-1.5" r="1.2" fill="#ff6600"/></g>`; }
+  const TERRAIN_FNS = [drawTree, drawCave, drawDune, drawFlame, drawWave, drawMountain, drawDragon];
+
   function renderMap(){
     const body = document.getElementById('mapBody');
     if(!body) return;
     const currentArea = getArea(state.level);
-    const W = 600, H = 170;
-    const areas = AREAS.filter(a=>a.name !== '龍の帰所').concat([AREAS[AREAS.length-1]]);
-    const n = areas.length;
-    const padX = 36, stepX = (W - padX*2) / (n - 1);
-    const cy = 90;
-    const AREA_ICONS = ['🌲','🌑','🏜️','🌋','🌊','❄️','🐉'];
-    let svg = `<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:${W}px;display:block;margin:0 auto;">`;
-    svg += `<line x1="${padX}" y1="${cy}" x2="${W-padX}" y2="${cy}" stroke="var(--border)" stroke-width="2"/>`;
-    areas.forEach((a, i)=>{
-      const x = padX + i * stepX;
-      const isCurrent = a.name === currentArea.name;
-      const isPast = a.max < state.level || (a === currentArea);
-      const color = isCurrent ? 'var(--fire)' : isPast ? 'var(--good)' : 'var(--ink-dim)';
-      const r = isCurrent ? 16 : 12;
-      svg += `<circle cx="${x}" cy="${cy}" r="${r}" fill="${isCurrent?'var(--fire)':isPast?'var(--arcane-dim)':'var(--surface-2)'}" stroke="${color}" stroke-width="${isCurrent?3:1.5}"/>`;
-      svg += `<text x="${x}" y="${cy+5}" text-anchor="middle" font-size="14" fill="${color}">${AREA_ICONS[i]||'●'}</text>`;
-      if(isCurrent) svg += `<text x="${x}" y="${cy-24}" text-anchor="middle" font-size="9" fill="var(--fire)" font-weight="600">ここ</text>`;
-      const labelY = i%2===0 ? cy+36 : cy+50;
-      svg += `<text x="${x}" y="${labelY}" text-anchor="middle" font-size="9" fill="${color}">${a.name.replace('の','\nの')}</text>`;
-      const lvLabel = a.max>=9999 ? `Lv.${a.min}+` : a.min===a.max ? `Lv.${a.min}` : `Lv.${a.min}-${a.max}`;
-      const lvY = i%2===0 ? cy-36 : cy-48;
-      svg += `<text x="${x}" y="${lvY}" text-anchor="middle" font-size="8" fill="${isCurrent?'var(--fire)':'var(--ink-dim)'}">${lvLabel}</text>`;
+    const W = 560, H = 300;
+
+    let svg = `<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" style="width:100%;display:block;border-radius:10px;overflow:hidden;">`;
+    // 背景：羊皮紙風のグラデーション
+    svg += `<defs>
+      <radialGradient id="bgGrad" cx="50%" cy="50%" r="70%">
+        <stop offset="0%" stop-color="#f5e9cc"/>
+        <stop offset="100%" stop-color="#dcc89a"/>
+      </radialGradient>
+      <filter id="glow"><feGaussianBlur stdDeviation="3" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+    </defs>`;
+    svg += `<rect width="${W}" height="${H}" fill="url(#bgGrad)"/>`;
+    // 装飾的な枠線
+    svg += `<rect x="4" y="4" width="${W-8}" height="${H-8}" fill="none" stroke="#a0845a" stroke-width="1.5" stroke-dasharray="4,3" rx="6"/>`;
+
+    // 道（ベジェ曲線）
+    const nodes = AREA_NODES;
+    for(let i=0;i<nodes.length-1;i++){
+      const a=nodes[i], b=nodes[i+1];
+      const passed = state.level > (AREAS[i]||{}).max||0;
+      svg += `<path d="M${a.x},${a.y} Q${(a.x+b.x)/2},${(a.y+b.y)/2-20} ${b.x},${b.y}" stroke="${passed?'#7a5a2a':'#b09a70'}" stroke-width="${passed?2.5:1.5}" fill="none" stroke-dasharray="${passed?'':4+','+3}"/>`;
+    }
+
+    // 地形アイコン＋エリアノード
+    nodes.forEach((node, i)=>{
+      const area = AREAS[i];
+      if(!area) return;
+      const isCurrent = area.name === currentArea.name;
+      const isPast = area.max < state.level && !isCurrent;
+      const oc = isPast ? 0.55 : 1;
+
+      // 地形描画
+      svg += `<g opacity="${oc}">${TERRAIN_FNS[i](node.x, node.y-4, 1)}</g>`;
+
+      // ピン（現在地）
+      if(isCurrent){
+        svg += `<g filter="url(#glow)">`;
+        svg += `<circle cx="${node.x}" cy="${node.y+20}" r="14" fill="#e85020" opacity="0.25"/>`;
+        svg += `</g>`;
+        svg += `<path d="M${node.x},${node.y+30} L${node.x-7},${node.y+14} A7,7 0 1,1 ${node.x+7},${node.y+14} Z" fill="#e85020"/>`;
+        svg += `<circle cx="${node.x}" cy="${node.y+14}" r="4" fill="#fff"/>`;
+        svg += `<text x="${node.x}" y="${node.y-30}" text-anchor="middle" font-size="10" fill="#e85020" font-weight="bold">▼ 現在地</text>`;
+      } else {
+        svg += `<circle cx="${node.x}" cy="${node.y+20}" r="5" fill="${node.col}" opacity="${isPast?0.5:0.8}"/>`;
+      }
+
+      // エリア名
+      const lvLabel = area.max>=9999 ? `Lv.${area.min}+` : `Lv.${area.min}-${area.max}`;
+      const shortName = area.name.length>5 ? area.name.slice(0,5)+'…' : area.name;
+      const ty = node.y+36;
+      svg += `<text x="${node.x}" y="${ty}" text-anchor="middle" font-size="9.5" fill="${isCurrent?'#e85020':isPast?'#6b5030':'#3a2a10'}" font-weight="${isCurrent?'bold':'normal'}">${shortName}</text>`;
+      svg += `<text x="${node.x}" y="${ty+11}" text-anchor="middle" font-size="8" fill="${isPast?'#a08050':'#7a6040'}">${lvLabel}</text>`;
     });
-    svg += '</svg>';
-    body.innerHTML = svg + `<p style="font-size:13px;color:var(--ink-dim);margin-top:12px;text-align:center;">現在地：<b style="color:var(--fire)">${currentArea.name}</b>（Lv.${state.level}）</p><p style="font-size:12px;color:var(--ink-dim);text-align:center;margin-top:4px;">${currentArea.desc}</p>`;
+
+    // タイトル
+    svg += `<text x="${W/2}" y="22" text-anchor="middle" font-size="12" fill="#6b4820" font-style="italic">── はてなき遠征 ──</text>`;
+    svg += `</svg>`;
+
+    body.innerHTML = svg + `<p style="font-size:13px;text-align:center;margin-top:10px;">現在地：<b style="color:#e85020">${currentArea.name}</b>（Lv.${state.level}）　${currentArea.desc}</p>`;
   }
 
   function renderHistoryPanel(){
@@ -1816,7 +1869,10 @@
       state.totalXpEarned = (state.totalXpEarned||0) + bonusXp;
       state.bossesDefeated = (state.bossesDefeated||0) + 1;
       addLog(`<span class="boss">◆ ${defeatedName} を打ち倒した！</span> 討伐報酬 +${bonusXp}XP <span class="g">+${bonusGold}G</span>`);
-      state.inventory.hpPotion++;
+      const bossDropKey = state.level>=15 ? 'fullElixir' : state.level>=10 ? 'elixir' : state.level>=5 ? 'hiPotion' : 'hpPotion';
+      state.inventory[bossDropKey] = (state.inventory[bossDropKey]||0) + 1;
+      const bossDrop = SHOP_ITEMS.find(i=>i.key===bossDropKey);
+      addLog(`戦利品：${bossDrop?bossDrop.icon+bossDrop.name:bossDropKey} を手に入れた`);
       sfxBossDefeat();
 
       if(kind === 'secret'){
@@ -1829,11 +1885,16 @@
       sfxDefeatEnemy();
       const dropRoll = Math.random();
       let drop = null;
-      if(dropRoll < 0.35){ drop='hpPotion'; }
+      const lv = state.level;
+      if(lv>=15 && dropRoll < 0.05){ drop='fullElixir'; }
+      else if(lv>=10 && dropRoll < 0.12){ drop=Math.random()<0.5?'elixir':'mpElixir'; }
+      else if(lv>=5  && dropRoll < 0.25){ drop=Math.random()<0.5?'hiPotion':'hiMpPotion'; }
+      else if(dropRoll < 0.35){ drop='hpPotion'; }
       else if(dropRoll < 0.55){ drop='mpPotion'; }
       if(drop){
-        state.inventory[drop]++;
-        addLog(`<span class="win">${defeatedName} を打ち倒した！</span> 戦利品：${drop==='hpPotion'?'体力ポーション':'魔力ポーション'}を手に入れた`);
+        state.inventory[drop] = (state.inventory[drop]||0) + 1;
+        const it = SHOP_ITEMS.find(i=>i.key===drop);
+        addLog(`<span class="win">${defeatedName} を打ち倒した！</span> 戦利品：${it?it.icon+it.name:drop}を手に入れた`);
       } else {
         addLog(`<span class="win">${defeatedName} を打ち倒した！</span>`);
       }
@@ -1964,8 +2025,7 @@
     applyAreaTheme(state.level);
     updateFighterSprites();
     updateFeatureVisibility();
-    document.getElementById('soundToggleBtn').textContent = state.soundOn ? '🔊' : '🔇';
-    document.getElementById('bgmToggleBtn').textContent = state.bgmOn ? '🎵' : '🔇🎵';
+    document.getElementById('soundToggleBtn').textContent = state.soundOn ? '🔊🎵' : '🔇';
     const need = xpToNext(state.level);
     document.getElementById('lvBadge').textContent = 'Lv.' + state.level;
     const loopBadge = document.getElementById('loopBadge');
@@ -2110,28 +2170,44 @@
     }).join('');
   }
 
+  const SHOP_ITEMS = [
+    {key:'hpPotion',    name:'体力ポーション',   icon:'🧪', cost:30,  reqLv:1,  kind:'hp',   amount:0.25, desc:'HPを最大値の25%回復'},
+    {key:'mpPotion',    name:'魔力ポーション',   icon:'🔷', cost:25,  reqLv:1,  kind:'mp',   amount:0.25, desc:'MPを最大値の25%回復'},
+    {key:'hiPotion',    name:'ハイポーション',   icon:'🍶', cost:80,  reqLv:5,  kind:'hp',   amount:0.55, desc:'HPを最大値の55%回復'},
+    {key:'hiMpPotion',  name:'ハイマジックポーション', icon:'💎', cost:70, reqLv:5, kind:'mp', amount:0.55, desc:'MPを最大値の55%回復'},
+    {key:'elixir',      name:'エクスポーション', icon:'⚗️', cost:180, reqLv:10, kind:'hp',   amount:1.0,  desc:'HPを全回復'},
+    {key:'mpElixir',    name:'エーテル',         icon:'🔮', cost:150, reqLv:10, kind:'mp',   amount:1.0,  desc:'MPを全回復'},
+    {key:'fullElixir',  name:'エリクサー',       icon:'✨', cost:400, reqLv:15, kind:'both', amount:1.0,  desc:'HP・MPを両方全回復'},
+    {key:'atkShard',    name:'攻撃のかけら',     icon:'⚔️', cost:120, reqLv:8,  kind:'atk',  amount:2,    desc:'攻撃力を一時的に+2（次の討伐まで）'},
+    {key:'defShard',    name:'守りのかけら',     icon:'🛡️', cost:100, reqLv:8,  kind:'def',  amount:2,    desc:'防御力を一時的に+2（次の討伐まで）'},
+  ];
+
   function renderShop(){
     const grid = document.getElementById('shopGrid');
-    const items = [
-      {key:'hpPotion', name:'体力ポーション', icon:'🧪', cost:30, heal:25, mp:false},
-      {key:'mpPotion', name:'魔力ポーション', icon:'🔷', cost:25, heal:20, mp:true}
-    ];
-    let html = items.map(it=>{
+    const lv = state.level;
+    const unlocked = SHOP_ITEMS.filter(it=>lv>=it.reqLv);
+    const locked = SHOP_ITEMS.filter(it=>lv<it.reqLv);
+    let html = unlocked.map(it=>{
       const count = state.inventory[it.key] || 0;
+      const canBuy = state.gold >= it.cost;
       return `
         <div class="item-card">
           <div class="skill-top">
             <span class="skill-name">${it.icon} ${it.name}</span>
             <span class="skill-cost">所持 ${count}</span>
           </div>
-          <div class="skill-desc">${it.mp?'MP':'HP'}を${it.heal}回復</div>
+          <div class="skill-desc">${it.desc}</div>
           <div style="display:flex; gap:8px;">
-            <button class="secondary" data-buy="${it.key}" data-cost="${it.cost}">購入 (${it.cost}G)</button>
+            <button class="secondary" data-buy="${it.key}" data-cost="${it.cost}" ${canBuy?'':'disabled'}>購入 (${it.cost}G)</button>
             <button class="magic" data-use="${it.key}" ${count>0?'':'disabled'}>使う</button>
           </div>
         </div>`;
     }).join('');
-
+    if(locked.length>0){
+      html += `<div class="skill-card locked" style="opacity:0.5;">
+        <div class="skill-desc">Lv.${locked[0].reqLv}でさらに品物が増える</div>
+      </div>`;
+    }
     grid.innerHTML = html;
   }
 
@@ -2557,29 +2633,42 @@
 
   function buyItem(key, cost){
     if(state.gold < cost) return;
+    const it = SHOP_ITEMS.find(i=>i.key===key);
+    if(!it) return;
     state.gold -= cost;
     state.inventory[key] = (state.inventory[key]||0) + 1;
     sfxClick();
-    addLog(`商店で ${key==='hpPotion'?'体力ポーション':'魔力ポーション'} を購入した（-${cost}G）`);
+    addLog(`商店で ${it.icon} ${it.name} を購入した（-${cost}G）`);
     saveState();
     render();
   }
 
   function useItem(key){
     if(!state.inventory[key]) return;
+    const it = SHOP_ITEMS.find(i=>i.key===key);
+    if(!it) return;
     state.inventory[key]--;
-    if(key === 'hpPotion'){
-      const amount = 25;
-      state.hp = Math.min(state.maxHp, state.hp + amount);
-      playHealEmote(amount, false);
-      sfxHeal();
-      addLog(`体力ポーションを使った。HPが${amount}回復した`);
-    } else {
-      const amount = 20;
-      state.mp = Math.min(state.maxMp, state.mp + amount);
-      playHealEmote(amount, true);
-      sfxHeal();
-      addLog(`魔力ポーションを使った。MPが${amount}回復した`);
+    if(it.kind==='hp'){
+      const amount = it.amount>=1 ? state.maxHp-state.hp : Math.round(state.maxHp*it.amount);
+      state.hp = Math.min(state.maxHp, state.hp + (it.amount>=1 ? state.maxHp : Math.round(state.maxHp*it.amount)));
+      playHealEmote(amount, false); sfxHeal();
+      addLog(`${it.icon} ${it.name} を使った。HPが${amount}回復した`);
+    } else if(it.kind==='mp'){
+      const amount = it.amount>=1 ? state.maxMp-state.mp : Math.round(state.maxMp*it.amount);
+      state.mp = Math.min(state.maxMp, state.mp + (it.amount>=1 ? state.maxMp : Math.round(state.maxMp*it.amount)));
+      playHealEmote(amount, true); sfxHeal();
+      addLog(`${it.icon} ${it.name} を使った。MPが${amount}回復した`);
+    } else if(it.kind==='both'){
+      const hAmt = state.maxHp-state.hp, mAmt = state.maxMp-state.mp;
+      state.hp = state.maxHp; state.mp = state.maxMp;
+      playHealEmote(hAmt, false); sfxHeal();
+      addLog(`${it.icon} ${it.name} を使った。HP・MPが全回復した`);
+    } else if(it.kind==='atk'){
+      state.atk = (state.atk||0) + it.amount;
+      addLog(`${it.icon} ${it.name} を使った。攻撃力が一時的に+${it.amount}された`);
+    } else if(it.kind==='def'){
+      state.def = (state.def||0) + it.amount;
+      addLog(`${it.icon} ${it.name} を使った。防御力が一時的に+${it.amount}された`);
     }
     saveState();
     render();
@@ -3186,13 +3275,14 @@
     const area = document.getElementById('bulkInput');
     const lines = area.value.split('\n').map(l=>l.trim()).filter(l=>l.length>0);
     if(lines.length===0) return;
+    const today = todayDateStr();
     lines.forEach(line=>{
       const m = line.match(/^(.*?)[\s,、]+(\d+)\s*分?$/);
       if(m && m[1].trim()){
         const est = parseInt(m[2],10);
-        addTask(m[1].trim(), est, '', '仕事', true, null);
+        addTask(m[1].trim(), est, today, '仕事', true, null);
       } else {
-        addTask(line, null, '', '仕事', false, null);
+        addTask(line, null, today, '仕事', false, null);
       }
     });
     area.value = '';
@@ -3405,16 +3495,11 @@
   document.getElementById('modalBackdrop').addEventListener('click', closeAllModals);
 
   document.getElementById('soundToggleBtn').addEventListener('click', ()=>{
-    state.soundOn = !state.soundOn;
-    document.getElementById('soundToggleBtn').textContent = state.soundOn ? '🔊' : '🔇';
-    if(state.soundOn) sfxClick();
-    saveState();
-  });
-
-  document.getElementById('bgmToggleBtn').addEventListener('click', ()=>{
-    state.bgmOn = !state.bgmOn;
-    document.getElementById('bgmToggleBtn').textContent = state.bgmOn ? '🎵' : '🔇🎵';
-    if(state.bgmOn){ ensureBgmStarted(); } else { stopBgm(); }
+    const on = !(state.soundOn && state.bgmOn);
+    state.soundOn = on;
+    state.bgmOn = on;
+    document.getElementById('soundToggleBtn').textContent = on ? '🔊🎵' : '🔇';
+    if(on){ sfxClick(); ensureBgmStarted(); } else { stopBgm(); }
     saveState();
   });
 
