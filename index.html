@@ -457,6 +457,64 @@
 </style>
 </head>
 <body data-theme="dark">
+
+<div id="authGate" style="
+  position:fixed; inset:0; z-index:9999;
+  background:#1a1510;
+  display:flex; flex-direction:column; align-items:center; justify-content:center;
+  gap:16px; padding:24px;">
+  <div style="font-size:28px; margin-bottom:4px;">⚔️</div>
+  <div style="font-size:20px; font-weight:700; color:#e8d4a0; letter-spacing:.04em;">タスクエ</div>
+  <div style="font-size:13px; color:#a09070; margin-bottom:8px;">この先に進むには合言葉が必要だ。</div>
+  <input id="authInput" type="password" placeholder="合言葉"
+    style="width:220px; padding:10px 14px; border-radius:8px; border:1px solid #6b5030;
+           background:#2a2015; color:#e8d4a0; font-size:15px; text-align:center; outline:none;">
+  <button id="authBtn"
+    style="width:220px; padding:10px; border-radius:8px; border:none; cursor:pointer;
+           background:#8b4820; color:#ffe8c0; font-size:14px; font-weight:600;">
+    入場する
+  </button>
+  <div id="authErr" style="font-size:12px; color:#e05030; min-height:16px;"></div>
+</div>
+
+<script>
+(function(){
+  // SHA-256ハッシュ値（後で差し替える）
+  const HASH = 'c968fab0d0da9f659c957d5116a61c8e1c92bf52d4b372316bae1f0c3a3b4186';
+  const KEY = 'tasque-auth';
+
+  async function sha256(msg){
+    const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(msg));
+    return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join('');
+  }
+
+  async function check(){
+    const val = document.getElementById('authInput').value;
+    const h = await sha256(val);
+    if(h === HASH){
+      sessionStorage.setItem(KEY,'1');
+      document.getElementById('authGate').remove();
+    } else {
+      document.getElementById('authErr').textContent = '合言葉が違う。';
+      document.getElementById('authInput').value='';
+      document.getElementById('authInput').focus();
+    }
+  }
+
+  // セッション内で認証済みなら即パス
+  if(sessionStorage.getItem(KEY)==='1'){
+    document.getElementById('authGate').remove();
+    return;
+  }
+
+  document.getElementById('authBtn').addEventListener('click', check);
+  document.getElementById('authInput').addEventListener('keydown', e=>{
+    if(e.key==='Enter') check();
+  });
+  document.getElementById('authInput').focus();
+})();
+</script>
+
 <div class="wrap">
   <div id="saveError" style="display:none; background:var(--blood-dim); color:#ffe9e9; border:1px solid var(--blood); border-radius:8px; padding:10px 14px; font-size:12.5px; margin-bottom:14px;">
     ⚠ 記録の保存に失敗しています。通信状況を確認してください（自動で再試行しています）。
@@ -2013,8 +2071,9 @@
     15: '◆ 同期・ギルド機能が解放された。'
   };
   let lastUnlockLevel = 0;
+  const DEMO_MODE = new URLSearchParams(location.search).get('demo') === '1';
   function updateFeatureVisibility(){
-    const lv = state.level;
+    const lv = DEMO_MODE ? 999 : state.level;
     document.querySelectorAll('[data-unlock]').forEach(el=>{
       const need = parseInt(el.dataset.unlock, 10);
       el.style.display = lv >= need ? '' : 'none';
